@@ -6,6 +6,10 @@ from app.models.transaction import Transaction, DetectedSubscription
 
 async def detect_and_save_subscriptions(session: AsyncSession, user_id: UUID) -> None:
     """Analyze transaction history to detect monthly subscription patterns and persist them."""
+    from app.models.user import User
+    await session.execute(
+        select(User.id).where(User.id == user_id).with_for_update()
+    )
     query = select(Transaction).where(
         Transaction.user_id == user_id,
         Transaction.amount < 0

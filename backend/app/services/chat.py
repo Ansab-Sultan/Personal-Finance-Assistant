@@ -59,15 +59,23 @@ async def get_summary_row(session: AsyncSession, user_id: UUID) -> Optional[Chat
     query = select(ChatMessage).where(
         ChatMessage.user_id == user_id,
         ChatMessage.role == MessageRole.system
-    )
+    ).order_by(ChatMessage.created_at.desc())
     result = await session.execute(query)
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 async def upsert_summary(session: AsyncSession, user_id: UUID, content: str) -> ChatMessage:
     """Insert a running summary row or update it if it already exists."""
+    from sqlalchemy import delete
     summary_row = await get_summary_row(session, user_id)
     if summary_row:
         summary_row.content = content
+        await session.execute(
+            delete(ChatMessage).where(
+                ChatMessage.user_id == user_id,
+                ChatMessage.role == MessageRole.system,
+                ChatMessage.id != summary_row.id
+            )
+        )
     else:
         summary_row = ChatMessage(
             user_id=user_id,

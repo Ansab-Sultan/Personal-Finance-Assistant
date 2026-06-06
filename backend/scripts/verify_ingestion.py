@@ -666,7 +666,13 @@ async def test_precomputed_subscriptions_and_anomalies(session: AsyncSession, us
     await create_transaction(session, user_id, txn_avg2)
     await create_transaction(session, user_id, txn_anomaly)
     await session.commit()
-    
+
+    from app.services.subscriptions import detect_and_save_subscriptions
+    from app.services.anomalies import detect_and_save_anomalies
+    await detect_and_save_subscriptions(session, user_id)
+    await detect_and_save_anomalies(session, user_id)
+    await session.commit()
+
     subs = await get_detected_subscriptions(session, user_id)
     assert len(subs) == 1, f"Expected 1 subscription, got {len(subs)}"
     assert subs[0].merchant == "Netflix"

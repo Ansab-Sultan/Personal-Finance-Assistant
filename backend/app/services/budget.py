@@ -119,16 +119,16 @@ async def create_or_update_budget(
         budget.limit_amount = limit_amount
     else:
         try:
-            budget = Budget(
-                user_id=user_id,
-                category=category,
-                limit_amount=limit_amount,
-                period=period
-            )
-            session.add(budget)
-            await session.flush()
+            async with session.begin_nested():
+                budget = Budget(
+                    user_id=user_id,
+                    category=category,
+                    limit_amount=limit_amount,
+                    period=period
+                )
+                session.add(budget)
+                await session.flush()
         except IntegrityError:
-            await session.rollback()
             result = await session.execute(query)
             budget = result.scalar_one()
             budget.limit_amount = limit_amount

@@ -32,17 +32,17 @@ async def adjust_rollup(
         if count_delta <= 0:
             return
         try:
-            rollup = MonthlyCategoryRollup(
-                user_id=user_id,
-                month=month,
-                category=category,
-                total_amount=amount_delta,
-                txn_count=count_delta
-            )
-            session.add(rollup)
-            await session.flush()
+            async with session.begin_nested():
+                rollup = MonthlyCategoryRollup(
+                    user_id=user_id,
+                    month=month,
+                    category=category,
+                    total_amount=amount_delta,
+                    txn_count=count_delta
+                )
+                session.add(rollup)
+                await session.flush()
         except IntegrityError:
-            await session.rollback()
             result = await session.execute(query)
             rollup = result.scalar_one()
             rollup.total_amount = float(rollup.total_amount) + amount_delta
@@ -197,14 +197,22 @@ async def refresh_monthly_rollups(
             
             if count and count > 0:
                 if not rollup:
-                    rollup = MonthlyCategoryRollup(
-                        user_id=user_id,
-                        month=month,
-                        category=category,
-                        total_amount=total,
-                        txn_count=count
-                    )
-                    session.add(rollup)
+                    try:
+                        async with session.begin_nested():
+                            rollup = MonthlyCategoryRollup(
+                                user_id=user_id,
+                                month=month,
+                                category=category,
+                                total_amount=total,
+                                txn_count=count
+                            )
+                            session.add(rollup)
+                            await session.flush()
+                    except IntegrityError:
+                        res_exist = await session.execute(q_exist)
+                        rollup = res_exist.scalar_one()
+                        rollup.total_amount = total
+                        rollup.txn_count = count
                 else:
                     rollup.total_amount = total
                     rollup.txn_count = count

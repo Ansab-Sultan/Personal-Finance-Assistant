@@ -11,9 +11,18 @@ async def get_user_by_clerk_id(db: AsyncSession, clerk_id: str) -> User | None:
 
 async def create_user(db: AsyncSession, clerk_id: str, email: str) -> User:
     """Create a new user in the database."""
-    user = User(clerk_id=clerk_id, email=email)
-    db.add(user)
-    await db.flush()
+    from sqlalchemy.exc import IntegrityError
+    try:
+        async with db.begin_nested():
+            user = User(clerk_id=clerk_id, email=email)
+            db.add(user)
+            await db.flush()
+    except IntegrityError:
+        query = select(User).where(User.clerk_id == clerk_id)
+        result = await db.execute(query)
+        user = result.scalar_one()
+        user.email = email
+        await db.flush()
     return user
 
 async def update_user_email(db: AsyncSession, user: User, email: str) -> User:

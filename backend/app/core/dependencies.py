@@ -49,15 +49,16 @@ async def get_db_user_id(
     user_id = result.scalar_one_or_none()
     if not user_id:
         try:
-            new_user = User(
-                clerk_id=clerk_id,
-                email="local-dev-user@example.com"
-            )
-            db.add(new_user)
+            async with db.begin_nested():
+                new_user = User(
+                    clerk_id=clerk_id,
+                    email="local-dev-user@example.com"
+                )
+                db.add(new_user)
+                await db.flush()
             await db.commit()
             user_id = new_user.id
         except IntegrityError:
-            await db.rollback()
             result = await db.execute(query)
             user_id = result.scalar_one()
     return user_id

@@ -43,15 +43,15 @@ async def upsert_preference(
         pref.value = value
     else:
         try:
-            pref = UserPreference(
-                user_id=user_id,
-                key=key,
-                value=value
-            )
-            session.add(pref)
-            await session.flush()
+            async with session.begin_nested():
+                pref = UserPreference(
+                    user_id=user_id,
+                    key=key,
+                    value=value
+                )
+                session.add(pref)
+                await session.flush()
         except IntegrityError:
-            await session.rollback()
             result = await session.execute(query)
             pref = result.scalar_one()
             pref.value = value

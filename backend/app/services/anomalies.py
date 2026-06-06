@@ -6,6 +6,10 @@ from app.models.transaction import Transaction, FlaggedAnomaly
 
 async def detect_and_save_anomalies(session: AsyncSession, user_id: UUID) -> None:
     """Scan transactions to flag expenses exceeding 2x the category average."""
+    from app.models.user import User
+    await session.execute(
+        select(User.id).where(User.id == user_id).with_for_update()
+    )
     query = select(Transaction).where(
         Transaction.user_id == user_id,
         Transaction.amount < 0
