@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { fetchWithAuth } from "../../lib/api";
+import { formatMoney } from "../../lib/format";
 import TransactionForm from "./TransactionForm";
 
 interface Transaction {
@@ -20,16 +21,6 @@ interface TransactionTableProps {
   refreshTrigger: number;
   onRefresh: () => void;
 }
-
-/** Format an amount in its own currency (proper symbol/placement), with a safe fallback. */
-const formatMoney = (amount: number, currency: string) => {
-  const code = (currency || "USD").toUpperCase();
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: code }).format(Math.abs(amount));
-  } catch {
-    return `${code} ${Math.abs(amount).toFixed(2)}`;
-  }
-};
 
 /**
  * Premium transaction ledger component with live filtering, pagination, and inline editing.

@@ -41,13 +41,15 @@ async def detect_and_save_anomalies(session: AsyncSession, user_id: UUID) -> Non
         val = abs(float(t.amount))
         cat_avg = category_averages.get(t.category, 0.0)
         if cat_avg > 0 and val > 2.0 * cat_avg:
+            cur = t.currency or "USD"
             anomaly = FlaggedAnomaly(
                 id=uuid4(),
                 user_id=user_id,
                 transaction_id=t.id,
                 category=t.category,
                 amount=val,
-                reason=f"Transaction amount ${val:.2f} is more than 2x the category average of ${cat_avg:.2f}.",
+                currency=cur,
+                reason=f"Transaction amount {cur} {val:.2f} is more than 2x the category average of {cur} {cat_avg:.2f}.",
                 detected_at=datetime.now()
             )
             session.add(anomaly)

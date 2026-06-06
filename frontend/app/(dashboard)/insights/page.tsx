@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { fetchWithAuth } from "../../../lib/api";
+import { formatMoney } from "../../../lib/format";
 
 interface Subscription {
   id: string;
   merchant: string;
   amount: number;
+  currency: string;
   cadence_days: number;
   last_seen: string;
   confidence: number;
@@ -18,6 +20,7 @@ interface Anomaly {
   transaction_id: string;
   category: string;
   amount: number;
+  currency: string;
   reason: string;
   detected_at: string;
 }
@@ -87,7 +90,7 @@ export default function InsightsPage() {
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-bold text-slate-900">${Math.abs(s.amount).toFixed(2)}</p>
+                      <p className="text-sm font-bold text-slate-900">{formatMoney(s.amount, s.currency)}</p>
                       <p className="text-[10px] text-slate-400">{(s.confidence * 100).toFixed(0)}% confidence</p>
                     </div>
                   </li>
@@ -119,7 +122,7 @@ export default function InsightsPage() {
                       <p className="text-[11px] text-slate-500 mt-0.5">{a.reason}</p>
                       <p className="text-[10px] text-slate-300 mt-0.5">{new Date(a.detected_at).toLocaleDateString()}</p>
                     </div>
-                    <p className="text-sm font-bold text-rose-600 flex-shrink-0">${Math.abs(a.amount).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-rose-600 flex-shrink-0">{formatMoney(a.amount, a.currency)}</p>
                   </li>
                 ))}
               </ul>

@@ -52,6 +52,7 @@ async def detect_and_save_subscriptions(session: AsyncSession, user_id: UUID) ->
                 user_id=user_id,
                 merchant=merchant_txns[0].merchant,
                 amount=avg_amount,
+                currency=merchant_txns[-1].currency or "USD",
                 cadence_days=cadence,
                 last_seen=last_seen,
                 confidence=confidence

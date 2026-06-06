@@ -95,6 +95,7 @@ class DetectedSubscription(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     merchant = Column(String, nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(3), nullable=False, default="USD", server_default="USD")
     cadence_days = Column(Integer, nullable=False)
     last_seen = Column(Date, nullable=False)
     confidence = Column(Numeric(4, 2), nullable=False)
@@ -115,6 +116,7 @@ class FlaggedAnomaly(Base):
         nullable=False
     )
     amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(3), nullable=False, default="USD", server_default="USD")
     reason = Column(String, nullable=False)
     detected_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

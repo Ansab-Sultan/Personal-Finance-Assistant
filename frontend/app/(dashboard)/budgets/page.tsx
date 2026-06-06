@@ -8,6 +8,7 @@ import BudgetCard, { BudgetStatus } from "../../../components/budget/BudgetCard"
 export default function BudgetsPage() {
   const { getToken } = useAuth();
   const [statuses, setStatuses] = useState<BudgetStatus[]>([]);
+  const [currency, setCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState<"all" | "monthly" | "yearly">("all");
   
@@ -33,8 +34,19 @@ export default function BudgetsPage() {
     }
   };
 
+  const loadCurrency = async () => {
+    try {
+      const token = await getToken();
+      const prefs = await fetchWithAuth("/api/v1/users/me/preferences", { token });
+      const pref = (prefs || []).find((p: any) => p.key === "currency_display");
+      if (pref?.value) setCurrency(pref.value);
+    } catch (err) {
+    }
+  };
+
   useEffect(() => {
     loadBudgets();
+    loadCurrency();
   }, []);
 
   const openCreateForm = () => {
@@ -186,6 +198,7 @@ export default function BudgetsPage() {
             <BudgetCard
               key={`${budget.category}-${budget.period}-${idx}`}
               status={budget}
+              currency={currency}
               onEdit={openEditForm}
               onDelete={handleDelete}
             />
@@ -247,7 +260,7 @@ export default function BudgetsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Limit Amount ($)</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Limit Amount ({currency})</label>
                 <input
                   type="number"
                   step="0.01"

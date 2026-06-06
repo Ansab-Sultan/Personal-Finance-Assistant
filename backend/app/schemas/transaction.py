@@ -54,6 +54,7 @@ class DetectedSubscriptionRead(BaseModel):
     id: UUID
     merchant: str
     amount: float
+    currency: str
     cadence_days: int
     last_seen: date_type
     confidence: float
@@ -68,6 +69,7 @@ class FlaggedAnomalyRead(BaseModel):
     transaction_id: UUID
     category: TransactionCategory
     amount: float
+    currency: str
     reason: str
     detected_at: datetime
 

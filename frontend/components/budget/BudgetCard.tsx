@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { formatMoney } from "../../lib/format";
 
 export interface BudgetStatus {
   id?: string;
@@ -15,11 +16,12 @@ export interface BudgetStatus {
 
 interface BudgetCardProps {
   status: BudgetStatus;
+  currency: string;
   onEdit: (status: BudgetStatus) => void;
   onDelete: (category: string, period: string) => void;
 }
 
-export default function BudgetCard({ status, onEdit, onDelete }: BudgetCardProps) {
+export default function BudgetCard({ status, currency, onEdit, onDelete }: BudgetCardProps) {
   const percentage = Math.min(100, Math.round(status.ratio * 100));
   
   const stateConfig = {
@@ -73,10 +75,10 @@ export default function BudgetCard({ status, onEdit, onDelete }: BudgetCardProps
         <div className="flex items-baseline justify-between mb-4">
           <div className="flex items-baseline gap-1">
             <span className="text-2xl font-black font-mono text-slate-900">
-              ${status.spent.toFixed(2)}
+              {formatMoney(status.spent, currency)}
             </span>
             <span className="text-slate-500 text-xs font-medium">
-              of ${status.limit.toFixed(2)}
+              of {formatMoney(status.limit, currency)}
             </span>
           </div>
           <span className="text-xs font-semibold text-slate-500 font-mono">
@@ -96,7 +98,7 @@ export default function BudgetCard({ status, onEdit, onDelete }: BudgetCardProps
           <div className="flex justify-between items-center mt-2 text-[10px] text-slate-400 font-semibold tracking-wide">
             <span>REMAINING</span>
             <span className={`font-mono text-xs ${status.state === "over" ? "text-rose-600 font-bold" : "text-slate-900"}`}>
-              ${status.remaining.toFixed(2)}
+              {formatMoney(status.remaining, currency)}
             </span>
           </div>
         </div>
