@@ -64,7 +64,7 @@ rollups:       unique(user_id, month, category)
 | `services/ingestion.py` | CSV parser + mock-bank fetcher → raw rows |
 | `services/normalizer.py` | raw rows → normalized `Transaction` schema (one shape for both sources) |
 | `services/deduplication.py` | compute `hash`, drop exact dupes before insert |
-| `services/tasks.py` | ARQ tasks: `process_csv_upload`, `fetch_mock_bank_data`, `refresh_monthly_rollups` |
+| `services/tasks.py` | ARQ tasks: `process_csv_upload`, `fetch_mock_bank_data_task`, `recompute_detections_task` |
 | `services/transactions.py` | single-row CRUD + **rollup sync** (recompute affected month/category buckets) |
 | `api/v1/transactions.py` | ingestion (`POST /upload-csv`) + full transaction CRUD (see below) |
 
@@ -76,11 +76,16 @@ CSV file / bank fetch
    → normalize          (dates, amounts, sign convention, category mapping)
    → dedup (hash)       (exact dupes dropped; unique constraint is the backstop)
    → bulk insert
-   → refresh_monthly_rollups  (ARQ, after insert)
+   → rollup sync + subscription/anomaly detect  (inline within the ARQ ingest job, once per batch)
 ```
 
 CSV upload returns fast: accept the file, enqueue `process_csv_upload` (ARQ), respond
 `202 Accepted` with a job/status reference. A multi-year file must not block the HTTP response.
+
+> **Detection placement.** Subscription/anomaly recompute runs **once per batch inside the ingest
+> job** here (already off the request path). Single-row CRUD instead enqueues a separate
+> `recompute_detections_task` after commit, so a one-row write never blocks on a full rescan. It's
+> event-driven, not a cron — see [06 Assistant](./06-assistant.md#subscriptions--anomalies--precomputed-read-only-at-query-time).
 
 ### Normalization decisions (write these in the README)
 

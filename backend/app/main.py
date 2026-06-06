@@ -1,8 +1,15 @@
+import os
+import sys
+
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.exceptions import AuthException, auth_exception_handler
-from app.routers import auth, users, transactions, budget
+from app.api.v1 import router as api_v1_router
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -21,10 +28,7 @@ def create_app() -> FastAPI:
     
     app.add_exception_handler(AuthException, auth_exception_handler)
     
-    app.include_router(auth.router)
-    app.include_router(users.router)
-    app.include_router(transactions.router)
-    app.include_router(budget.router)
+    app.include_router(api_v1_router)
     
     @app.get("/health")
     async def health_check():

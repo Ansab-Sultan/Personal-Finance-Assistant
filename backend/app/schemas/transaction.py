@@ -41,3 +41,10 @@ class TransactionPaginated(BaseModel):
     total: int
     page: int
     size: int
+
+
+class ReceiptParseRequest(BaseModel):
+    """Schema for receipt parsing request containing base64 data."""
+    image_base64: str = Field(..., description="Base64 encoded receipt image")
+    mime_type: str = Field("image/jpeg", description="MIME type of the image")
+

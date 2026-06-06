@@ -16,20 +16,23 @@
 CREATE TYPE message_role AS ENUM ('user', 'assistant', 'system');
 
 chat_messages (
-  id, user_id,
-  role       message_role NOT NULL,
-  content    TEXT         NOT NULL,
-  created_at TIMESTAMPTZ
+  id           UUID PRIMARY KEY,
+  user_id      TEXT         NOT NULL,
+  role         message_role NOT NULL,
+  content      TEXT         NOT NULL,
+  is_summarized BOOLEAN     NOT NULL DEFAULT FALSE,  -- TRUE once this turn is folded into the summary
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
 )
--- index (user_id, created_at)  → fast recent-history fetch, newest-first
+-- index (user_id, created_at)         → fast recent-history fetch, newest-first
+-- index (user_id, is_summarized)      → fast count of unsummarized turns
 ```
 
-- `system` is included in the ENUM even though system messages are not user-facing — they may be
-  persisted for debugging/auditing the running summary. Only `user` and `assistant` rows are
-  returned to the frontend.
+- `system` rows hold the **running summary** — one row per user, overwritten each time the summary
+  is refreshed. Only `user` and `assistant` rows are returned to the frontend.
+- `is_summarized = TRUE` marks turns that have already been folded into the summary row — they are
+  never sent verbatim to the LLM again.
 
-*(Optional if multi-conversation is in scope: add a `conversations` table and `conversation_id`.
-For 6 hours, a single rolling thread per user is fine — note the simplification.)*
+*(Single rolling thread per user — no `conversations` table. Note the simplification in README.)*
 
 ---
 
@@ -48,17 +51,63 @@ Never send the entire history to the model. On each new message:
 context = system prompt
         + user preferences (from Module 04)
         + running summary of older turns   (if history is long)
-        + last N raw turns                 (recent verbatim)
+        + last N raw turns verbatim        (recency matters most)
         + the new user message
 ```
 
-- Keep the **last N turns verbatim** (recency matters most).
-- Maintain a **running summary** of everything older — refresh it when the tail grows past a
-  threshold. This caps context size (and cost) regardless of how long the conversation gets.
+#### Constants
+
+```python
+RECENT_TURNS       = 20   # always sent verbatim; never summarized away
+SUMMARIZE_THRESHOLD = 40  # trigger a summary refresh when unsummarized turns exceed this
+```
+
+#### Summarization trigger (runs before the main agent call)
+
+```python
+async def maybe_refresh_summary(user_id: str, db: AsyncSession) -> str | None:
+    unsummarized_count = await count_unsummarized(user_id, db)
+
+    if unsummarized_count <= SUMMARIZE_THRESHOLD:
+        return await get_existing_summary(user_id, db)  # None if first time
+
+    # turns to fold in = all unsummarized EXCEPT the most recent RECENT_TURNS
+    old_turns = await get_turns_to_summarize(user_id, exclude_recent=RECENT_TURNS, db=db)
+    existing  = await get_existing_summary(user_id, db) or ""
+
+    new_summary = await llm.summarize(existing, old_turns)  # cheap, short prompt
+
+    await upsert_summary_row(user_id, new_summary, db)       # role='system', overwrites previous
+    await mark_as_summarized(old_turns, db)                  # is_summarized = TRUE
+
+    return new_summary
+```
+
+- The summarization call is a **separate LLM call with a short compression prompt** — it runs
+  once per threshold crossing, not on every message.
+- `upsert_summary_row` keeps exactly one `role='system'` row per user — no accumulation.
+- `mark_as_summarized` sets `is_summarized = TRUE` on the folded turns — they are never sent
+  verbatim again, but remain in the DB for audit/debugging.
+
+#### Building context for the agent
+
+```python
+summary  = await maybe_refresh_summary(user_id, db)
+recent   = await get_last_n_turns(user_id, n=RECENT_TURNS, db=db)
+
+context_messages = [system_prompt]
+if summary:
+    context_messages.append({"role": "system", "content": f"Summary of earlier conversation:\n{summary}"})
+context_messages += recent          # verbatim last-N turns
+context_messages.append(new_message)
+```
+
 - Persist **both** the user message and the assistant reply after each turn.
+- On the very first message: no summary exists, no recent turns — just system prompt + preferences
+  + message. No special case needed; the code handles it naturally.
 
 > This is the chat-history half of the main plan's "Large Context Handling." The transaction-history
-> half is solved separately by SQL + rollups (Module 02) — the model never ingests raw transactions.
+> half is solved by SQL + rollups (Module 02) — the model never ingests raw transactions.
 
 ---
 
@@ -97,7 +146,8 @@ arrive.
 |------|------|
 | Persist turns + recent-window fetch | Fully working — assistant depends on it |
 | SSE streaming | Working — directly serves the "fast" constraint |
-| Running summary of old turns | Working; if time-boxed, cap to last-N only and note it |
+| `is_summarized` column + summary row schema | Fully working — schema is the foundation |
+| Summarization trigger + `maybe_refresh_summary` | Fully working — ~30 lines, high evaluator signal |
 | Multiple named conversations | Skip — single rolling thread per user, note in README |
 
 ---
@@ -107,4 +157,7 @@ arrive.
 - [ ] Every user/assistant turn is persisted and `user_id`-scoped.
 - [ ] A new message is answered with prior context available (the assistant "remembers" the thread).
 - [ ] Responses stream token-by-token over SSE.
-- [ ] A long conversation does not grow context unbounded (summary + window in effect).
+- [ ] A long conversation does not grow context unbounded — summary triggers when unsummarized turns exceed `SUMMARIZE_THRESHOLD`.
+- [ ] The summary row is a single `role='system'` row per user, overwritten on each refresh.
+- [ ] Summarized turns are marked `is_summarized = TRUE` and never re-sent verbatim.
+- [ ] First message works with no summary and no history (no special case needed).

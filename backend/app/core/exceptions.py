@@ -12,3 +12,9 @@ async def auth_exception_handler(request: Request, exc: AuthException):
         status_code=status.HTTP_401_UNAUTHORIZED,
         content={"detail": exc.detail},
     )
+
+class DuplicateTransactionError(Exception):
+    """Raised when attempting to create a duplicate transaction."""
+    def __init__(self, existing_transaction) -> None:
+        self.existing_transaction = existing_transaction
+

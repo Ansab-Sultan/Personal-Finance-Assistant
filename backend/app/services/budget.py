@@ -45,6 +45,39 @@ async def compute_budget_status(
         if val is not None:
             spent_sum = abs(float(val))
             
+    if category == TransactionCategory.restaurants:
+        from app.services.memory import get_preference_by_key
+        exclude_cat_name = await get_preference_by_key(session, user_id, "exclude_from_food")
+        if exclude_cat_name:
+            try:
+                exclude_cat = TransactionCategory(exclude_cat_name)
+                exclude_spent = 0.0
+                if period == BudgetPeriod.monthly:
+                    current_month = date.today().strftime("%Y-%m")
+                    eq = select(MonthlyCategoryRollup.total_amount).where(
+                        MonthlyCategoryRollup.user_id == user_id,
+                        MonthlyCategoryRollup.month == current_month,
+                        MonthlyCategoryRollup.category == exclude_cat
+                    )
+                    eres = await session.execute(eq)
+                    eval_val = eres.scalar_one_or_none()
+                    if eval_val is not None:
+                        exclude_spent = abs(float(eval_val))
+                elif period == BudgetPeriod.yearly:
+                    current_year = str(date.today().year)
+                    eq = select(func.sum(MonthlyCategoryRollup.total_amount)).where(
+                        MonthlyCategoryRollup.user_id == user_id,
+                        MonthlyCategoryRollup.category == exclude_cat,
+                        MonthlyCategoryRollup.month.like(f"{current_year}-%")
+                    )
+                    eres = await session.execute(eq)
+                    eval_val = eres.scalar_one_or_none()
+                    if eval_val is not None:
+                        exclude_spent = abs(float(eval_val))
+                spent_sum = max(0.0, spent_sum - exclude_spent)
+            except ValueError:
+                pass
+                
     remaining = max(0.0, limit_amount - spent_sum)
     ratio = spent_sum / limit_amount if limit_amount > 0 else 0.0
     
@@ -73,6 +106,7 @@ async def create_or_update_budget(
     period: BudgetPeriod
 ) -> Budget:
     """Create a new budget or update an existing one for the same user, category and period."""
+    from sqlalchemy.exc import IntegrityError
     query = select(Budget).where(
         Budget.user_id == user_id,
         Budget.category == category,
@@ -84,15 +118,22 @@ async def create_or_update_budget(
     if budget:
         budget.limit_amount = limit_amount
     else:
-        budget = Budget(
-            user_id=user_id,
-            category=category,
-            limit_amount=limit_amount,
-            period=period
-        )
-        session.add(budget)
-        
-    await session.flush()
+        try:
+            budget = Budget(
+                user_id=user_id,
+                category=category,
+                limit_amount=limit_amount,
+                period=period
+            )
+            session.add(budget)
+            await session.flush()
+        except IntegrityError:
+            await session.rollback()
+            result = await session.execute(query)
+            budget = result.scalar_one()
+            budget.limit_amount = limit_amount
+            await session.flush()
+            
     return budget
 
 async def get_budget(session: AsyncSession, user_id: UUID, budget_id: UUID) -> Optional[Budget]:
@@ -139,3 +180,35 @@ async def get_all_budget_statuses(session: AsyncSession, user_id: UUID) -> List[
         status["id"] = b.id
         statuses.append(status)
     return statuses
+
+async def update_budget(
+    session: AsyncSession,
+    user_id: UUID,
+    budget_id: UUID,
+    update_data: Dict[str, Any]
+) -> Optional[Budget]:
+    """Update configured fields of a budget."""
+    budget = await get_budget(session, user_id, budget_id)
+    if not budget:
+        return None
+    for key, value in update_data.items():
+        setattr(budget, key, value)
+    await session.flush()
+    return budget
+
+async def get_budget_limit(
+    session: AsyncSession,
+    user_id: UUID,
+    category: TransactionCategory,
+    period: BudgetPeriod
+) -> float:
+    """Calculate budget limit for a specific category and period, returning 0.0 if not configured."""
+    query = select(Budget.limit_amount).where(
+        Budget.user_id == user_id,
+        Budget.category == category,
+        Budget.period == period
+    )
+    res = await session.execute(query)
+    limit_val = res.scalar_one_or_none()
+    return float(limit_val) if limit_val is not None else 0.0
+

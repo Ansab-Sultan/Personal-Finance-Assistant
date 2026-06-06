@@ -186,6 +186,10 @@ async def ingest_transactions(
     
     if affected_buckets:
         await refresh_monthly_rollups(session, user_id, list(affected_buckets))
+        from app.services.subscriptions import detect_and_save_subscriptions
+        from app.services.anomalies import detect_and_save_anomalies
+        await detect_and_save_subscriptions(session, user_id)
+        await detect_and_save_anomalies(session, user_id)
         
     inserted_count = len(db_txns)
         

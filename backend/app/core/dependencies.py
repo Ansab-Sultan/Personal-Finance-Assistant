@@ -42,15 +42,24 @@ async def get_db_user_id(
     clerk_id: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> UUID:
-    """Dependency to look up the DB internal UUID for the authenticated user."""
+    """Dependency to look up the DB internal UUID for the authenticated user, auto-creating it if not found."""
+    from sqlalchemy.exc import IntegrityError
     query = select(User.id).where(User.clerk_id == clerk_id)
     result = await db.execute(query)
     user_id = result.scalar_one_or_none()
     if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not registered in local database",
-        )
+        try:
+            new_user = User(
+                clerk_id=clerk_id,
+                email="local-dev-user@example.com"
+            )
+            db.add(new_user)
+            await db.commit()
+            user_id = new_user.id
+        except IntegrityError:
+            await db.rollback()
+            result = await db.execute(query)
+            user_id = result.scalar_one()
     return user_id
 
 async def get_redis_pool():

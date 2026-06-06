@@ -85,3 +85,39 @@ class MonthlyCategoryRollup(Base):
     __table_args__ = (
         Index("idx_rollups_user_month_category", "user_id", "month", "category", unique=True),
     )
+
+
+class DetectedSubscription(Base):
+    """ORM model representing monthly recurring transactions detected by heuristics."""
+    __tablename__ = "detected_subscriptions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    merchant = Column(String, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    cadence_days = Column(Integer, nullable=False)
+    last_seen = Column(Date, nullable=False)
+    confidence = Column(Numeric(4, 2), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="detected_subscriptions")
+
+
+class FlaggedAnomaly(Base):
+    """ORM model representing anomalous transaction amounts flagged by heuristics."""
+    __tablename__ = "flagged_anomalies"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    transaction_id = Column(UUID(as_uuid=True), ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False, index=True)
+    category = Column(
+        Enum(TransactionCategory, name="transaction_category", create_type=False),
+        nullable=False
+    )
+    amount = Column(Numeric(12, 2), nullable=False)
+    reason = Column(String, nullable=False)
+    detected_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="flagged_anomalies")
+    transaction = relationship("Transaction")
+

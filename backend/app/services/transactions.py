@@ -19,6 +19,7 @@ async def adjust_rollup(
     count_delta: int
 ) -> None:
     """Adjust the monthly category rollup bucket (increment or decrement)."""
+    from sqlalchemy.exc import IntegrityError
     query = select(MonthlyCategoryRollup).where(
         MonthlyCategoryRollup.user_id == user_id,
         MonthlyCategoryRollup.month == month,
@@ -30,14 +31,25 @@ async def adjust_rollup(
     if not rollup:
         if count_delta <= 0:
             return
-        rollup = MonthlyCategoryRollup(
-            user_id=user_id,
-            month=month,
-            category=category,
-            total_amount=amount_delta,
-            txn_count=count_delta
-        )
-        session.add(rollup)
+        try:
+            rollup = MonthlyCategoryRollup(
+                user_id=user_id,
+                month=month,
+                category=category,
+                total_amount=amount_delta,
+                txn_count=count_delta
+            )
+            session.add(rollup)
+            await session.flush()
+        except IntegrityError:
+            await session.rollback()
+            result = await session.execute(query)
+            rollup = result.scalar_one()
+            rollup.total_amount = float(rollup.total_amount) + amount_delta
+            rollup.txn_count += count_delta
+            if rollup.txn_count <= 0:
+                await session.delete(rollup)
+            await session.flush()
     else:
         rollup.total_amount = float(rollup.total_amount) + amount_delta
         rollup.txn_count += count_delta
@@ -72,7 +84,9 @@ async def create_transaction(
     
     month = get_month_str(date_val)
     await adjust_rollup(session, user_id, month, category, float(amount), 1)
-    
+
+    # Subscription/anomaly detection is recomputed off the request path via an enqueued
+    # ARQ job (see recompute_detections_task) — a single write shouldn't block on a full rescan.
     return new_txn
 
 async def update_transaction(
@@ -112,7 +126,8 @@ async def update_transaction(
         
         await adjust_rollup(session, user_id, old_month, old_category, -old_amount, -1)
         await adjust_rollup(session, user_id, new_month, new_category, float(new_amount), 1)
-        
+
+    # Detection recompute is enqueued by the API layer after commit (see recompute_detections_task).
     return txn
 
 async def delete_transaction(
@@ -139,7 +154,8 @@ async def delete_transaction(
     
     month = get_month_str(old_date)
     await adjust_rollup(session, user_id, month, old_category, -old_amount, -1)
-    
+
+    # Detection recompute is enqueued by the API layer after commit (see recompute_detections_task).
     return True
 
 async def refresh_monthly_rollups(
@@ -195,3 +211,81 @@ async def refresh_monthly_rollups(
             else:
                 if rollup:
                     await session.delete(rollup)
+
+async def get_transaction(
+    session: AsyncSession,
+    user_id: UUID,
+    txn_id: UUID
+) -> Optional[Transaction]:
+    """Fetch a single transaction scoped to the user."""
+    query = select(Transaction).where(
+        Transaction.id == txn_id,
+        Transaction.user_id == user_id
+    )
+    result = await session.execute(query)
+    return result.scalar_one_or_none()
+
+async def list_transactions(
+    session: AsyncSession,
+    user_id: UUID,
+    page: int,
+    size: int,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    category: Optional[str] = None,
+    merchant: Optional[str] = None
+) -> tuple[List[Transaction], int]:
+    """Retrieve filtered and paginated transactions for a user, along with the total count."""
+    from sqlalchemy import and_, desc
+    
+    conditions = [Transaction.user_id == user_id]
+    if start_date:
+        conditions.append(Transaction.date >= start_date)
+    if end_date:
+        conditions.append(Transaction.date <= end_date)
+    if category:
+        conditions.append(Transaction.category == category.lower())
+    if merchant:
+        conditions.append(Transaction.merchant.ilike(f"%{merchant}%"))
+        
+    where_clause = and_(*conditions)
+    
+    count_query = select(func.count()).select_from(Transaction).where(where_clause)
+    count_result = await session.execute(count_query)
+    total = count_result.scalar_one()
+    
+    query = select(Transaction).where(where_clause).order_by(desc(Transaction.date)).offset((page - 1) * size).limit(size)
+    result = await session.execute(query)
+    items = list(result.scalars().all())
+    
+    return items, total
+
+async def create_manual_transaction(
+    session: AsyncSession,
+    user_id: UUID,
+    txn_data: Dict[str, Any],
+    force: bool
+) -> Transaction:
+    """Create a manual transaction with duplicate validation checking."""
+    from app.services.deduplication import compute_transaction_hash
+    from app.core.exceptions import DuplicateTransactionError
+    
+    txn_dict = dict(txn_data)
+    txn_dict["source"] = "manual"
+    
+    h = compute_transaction_hash(user_id, txn_dict["date"], txn_dict["amount"], txn_dict["merchant"])
+    
+    if not force:
+        query = select(Transaction).where(
+            Transaction.user_id == user_id,
+            Transaction.hash == h
+        )
+        result = await session.execute(query)
+        existing = result.scalar_one_or_none()
+        if existing:
+            raise DuplicateTransactionError(existing)
+    else:
+        txn_dict["merchant"] = f"{txn_dict['merchant']} (duplicate)"
+        
+    return await create_transaction(session, user_id, txn_dict)
+

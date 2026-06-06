@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Header, HTTPException, Request, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
 from svix.webhooks import Webhook, WebhookVerificationError
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.user import User
+from app.services import user as user_service
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/webhook", status_code=status.HTTP_200_OK)
 async def clerk_webhook(
@@ -48,15 +47,11 @@ async def clerk_webhook(
                 detail="Invalid user creation payload",
             )
             
-        query = select(User).where(User.clerk_id == clerk_id)
-        result = await db.execute(query)
-        user = result.scalar_one_or_none()
-        
+        user = await user_service.get_user_by_clerk_id(db, clerk_id)
         if not user:
-            user = User(clerk_id=clerk_id, email=email)
-            db.add(user)
+            await user_service.create_user(db, clerk_id, email)
         else:
-            user.email = email
+            await user_service.update_user_email(db, user, email)
             
         await db.commit()
         return {"status": "user synced successfully"}
@@ -69,8 +64,7 @@ async def clerk_webhook(
                 detail="Invalid user deletion payload",
             )
             
-        query = delete(User).where(User.clerk_id == clerk_id)
-        await db.execute(query)
+        await user_service.delete_user_by_clerk_id(db, clerk_id)
         await db.commit()
         return {"status": "user deleted successfully"}
         

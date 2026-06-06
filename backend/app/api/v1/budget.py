@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import List
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -10,7 +10,7 @@ from app.models.budget import BudgetPeriod
 from app.schemas.budget import BudgetRead, BudgetCreate, BudgetUpdate, BudgetStatusRead
 from app.services import budget as budget_service
 
-router = APIRouter(prefix="/api/v1/budgets", tags=["budgets"])
+router = APIRouter(prefix="/budgets", tags=["budgets"])
 
 @router.post("", response_model=BudgetRead, status_code=status.HTTP_201_CREATED)
 async def create_or_update_user_budget(
@@ -35,8 +35,7 @@ async def list_user_budgets(
     db: AsyncSession = Depends(get_db)
 ):
     """List all budgets configured by the current user."""
-    budgets = await budget_service.list_budgets(db, user_id)
-    return budgets
+    return await budget_service.list_budgets(db, user_id)
 
 @router.get("/status", response_model=List[BudgetStatusRead])
 async def get_all_budgets_status(
@@ -44,8 +43,7 @@ async def get_all_budgets_status(
     db: AsyncSession = Depends(get_db)
 ):
     """Retrieve spent status for all configured budgets of the user."""
-    statuses = await budget_service.get_all_budget_statuses(db, user_id)
-    return statuses
+    return await budget_service.get_all_budget_statuses(db, user_id)
 
 @router.get("/status/{category}/{period}", response_model=BudgetStatusRead)
 async def get_specific_budget_status(
@@ -54,33 +52,15 @@ async def get_specific_budget_status(
     user_id: UUID = Depends(get_db_user_id),
     db: AsyncSession = Depends(get_db)
 ):
-    """Calculate and retrieve budget spent status for a specific category and period, even if no budget is set.
-    
-    If no budget is set, limit will default to 0.0, and status will indicate no budget configuration.
-    """
-    limit = 0.0
-    
-    from sqlalchemy import select
-    from app.models.budget import Budget
-    
-    query = select(Budget.limit_amount).where(
-        Budget.user_id == user_id,
-        Budget.category == category,
-        Budget.period == period
-    )
-    res = await db.execute(query)
-    limit_val = res.scalar_one_or_none()
-    if limit_val is not None:
-        limit = float(limit_val)
-        
-    status_details = await budget_service.compute_budget_status(
+    """Calculate and retrieve budget spent status for a specific category and period, even if no budget is set."""
+    limit = await budget_service.get_budget_limit(db, user_id, category, period)
+    return await budget_service.compute_budget_status(
         session=db,
         user_id=user_id,
         category=category,
         period=period,
         limit_amount=limit
     )
-    return status_details
 
 @router.get("/{id}", response_model=BudgetRead)
 async def read_user_budget(
@@ -88,7 +68,7 @@ async def read_user_budget(
     user_id: UUID = Depends(get_db_user_id),
     db: AsyncSession = Depends(get_db)
 ):
-    """Read a specific budget details, scoped to the current user."""
+    """Read specific budget details, scoped to the current user."""
     budget = await budget_service.get_budget(db, user_id, id)
     if not budget:
         raise HTTPException(
@@ -105,17 +85,13 @@ async def update_user_budget(
     db: AsyncSession = Depends(get_db)
 ):
     """Update configured fields of a budget."""
-    budget = await budget_service.get_budget(db, user_id, id)
+    update_dict = payload.model_dump(exclude_unset=True)
+    budget = await budget_service.update_budget(db, user_id, id, update_dict)
     if not budget:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Budget not found"
         )
-        
-    update_dict = payload.model_dump(exclude_unset=True)
-    for key, value in update_dict.items():
-        setattr(budget, key, value)
-        
     await db.commit()
     return budget
 

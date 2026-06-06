@@ -3,18 +3,17 @@ from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, desc
 from arq.connections import ArqRedis
 
 from app.core.database import get_db
 from app.core.dependencies import get_db_user_id, get_redis_pool
-from app.models.transaction import Transaction
-from app.schemas.transaction import TransactionRead, TransactionCreate, TransactionUpdate, TransactionPaginated
+from app.schemas.transaction import TransactionRead, TransactionCreate, TransactionUpdate, TransactionPaginated, ReceiptParseRequest
 from app.services import transactions as txn_service
 from app.services.ingestion import parse_csv_stream, ingest_transactions, fetch_mock_bank_data
 from app.services.normalizer import normalize_transaction_data
+from app.core.exceptions import DuplicateTransactionError
 
-router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
+router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 @router.post("/upload-csv", status_code=status.HTTP_202_ACCEPTED)
 async def upload_csv(
@@ -64,41 +63,30 @@ async def create_manual_transaction(
     payload: TransactionCreate,
     force: bool = False,
     user_id: UUID = Depends(get_db_user_id),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis: ArqRedis = Depends(get_redis_pool)
 ):
-    """Create a new manual transaction, with duplicate checking."""
+    """Create a new manual transaction, verifying uniqueness through the transaction service."""
     txn_dict = payload.model_dump()
-    txn_dict["source"] = "manual"
-    
-    from app.services.deduplication import compute_transaction_hash
-    h = compute_transaction_hash(user_id, txn_dict["date"], txn_dict["amount"], txn_dict["merchant"])
-    
-    if not force:
-        query = select(Transaction).where(
-            Transaction.user_id == user_id,
-            Transaction.hash == h
-        )
-        result = await db.execute(query)
-        existing = result.scalar_one_or_none()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "message": "Looks like a duplicate transaction exists.",
-                    "existing_transaction": {
-                        "id": str(existing.id),
-                        "date": existing.date.isoformat(),
-                        "amount": float(existing.amount),
-                        "merchant": existing.merchant
-                    }
+    try:
+        txn = await txn_service.create_manual_transaction(db, user_id, txn_dict, force)
+        await db.commit()
+        await redis.enqueue_job("recompute_detections_task", str(user_id))
+        return txn
+    except DuplicateTransactionError as exc:
+        existing = exc.existing_transaction
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Looks like a duplicate transaction exists.",
+                "existing_transaction": {
+                    "id": str(existing.id),
+                    "date": existing.date.isoformat(),
+                    "amount": float(existing.amount),
+                    "merchant": existing.merchant
                 }
-            )
-    else:
-        txn_dict["merchant"] = f"{txn_dict['merchant']} (duplicate)"
-        
-    txn = await txn_service.create_transaction(db, user_id, txn_dict)
-    await db.commit()
-    return txn
+            }
+        )
 
 @router.get("", response_model=TransactionPaginated)
 async def list_transactions(
@@ -111,34 +99,50 @@ async def list_transactions(
     user_id: UUID = Depends(get_db_user_id),
     db: AsyncSession = Depends(get_db)
 ):
-    """Retrieve a paginated and filtered list of transactions for the current user."""
-    conditions = [Transaction.user_id == user_id]
-    
-    if start_date:
-        conditions.append(Transaction.date >= start_date)
-    if end_date:
-        conditions.append(Transaction.date <= end_date)
-    if category:
-        conditions.append(Transaction.category == category.lower())
-    if merchant:
-        conditions.append(Transaction.merchant.ilike(f"%{merchant}%"))
-        
-    where_clause = and_(*conditions)
-    
-    count_query = select(func.count()).select_from(Transaction).where(where_clause)
-    count_result = await db.execute(count_query)
-    total = count_result.scalar_one()
-    
-    query = select(Transaction).where(where_clause).order_by(desc(Transaction.date)).offset((page - 1) * size).limit(size)
-    result = await db.execute(query)
-    items = result.scalars().all()
-    
+    """Retrieve filtered and paginated list of transactions from the service."""
+    items, total = await txn_service.list_transactions(
+        db, user_id, page, size, start_date, end_date, category, merchant
+    )
     return {
         "items": items,
         "total": total,
         "page": page,
         "size": size
     }
+
+@router.get("/subscriptions")
+async def get_user_subscriptions(
+    user_id: UUID = Depends(get_db_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve precomputed subscription detections for the current user."""
+    from app.services.subscriptions import get_detected_subscriptions
+    return await get_detected_subscriptions(db, user_id)
+
+@router.get("/anomalies")
+async def get_user_anomalies(
+    user_id: UUID = Depends(get_db_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve precomputed transaction anomalies for the current user."""
+    from app.services.anomalies import get_flagged_anomalies
+    return await get_flagged_anomalies(db, user_id)
+
+@router.post("/receipts/parse")
+async def parse_receipt(
+    payload: ReceiptParseRequest,
+    user_id: UUID = Depends(get_db_user_id)
+):
+    """Parse a receipt image and return extracted transaction fields."""
+    from app.services.receipt import parse_receipt_image
+    try:
+        data = await parse_receipt_image(payload.image_base64, payload.mime_type)
+        return data
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse receipt image: {str(exc)}"
+        )
 
 @router.get("/{id}", response_model=TransactionRead)
 async def read_transaction(
@@ -147,12 +151,7 @@ async def read_transaction(
     db: AsyncSession = Depends(get_db)
 ):
     """Read a specific transaction details for the current user."""
-    query = select(Transaction).where(
-        Transaction.id == id,
-        Transaction.user_id == user_id
-    )
-    result = await db.execute(query)
-    txn = result.scalar_one_or_none()
+    txn = await txn_service.get_transaction(db, user_id, id)
     if not txn:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -165,7 +164,8 @@ async def update_transaction_route(
     id: UUID,
     payload: TransactionUpdate,
     user_id: UUID = Depends(get_db_user_id),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis: ArqRedis = Depends(get_redis_pool)
 ):
     """Update transaction details and adjust monthly rollups accordingly."""
     update_dict = payload.model_dump(exclude_unset=True)
@@ -176,13 +176,15 @@ async def update_transaction_route(
             detail="Transaction not found"
         )
     await db.commit()
+    await redis.enqueue_job("recompute_detections_task", str(user_id))
     return txn
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_transaction_route(
     id: UUID,
     user_id: UUID = Depends(get_db_user_id),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    redis: ArqRedis = Depends(get_redis_pool)
 ):
     """Delete a transaction and decrement the corresponding monthly rollup."""
     deleted = await txn_service.delete_transaction(db, user_id, id)
@@ -192,4 +194,5 @@ async def delete_transaction_route(
             detail="Transaction not found"
         )
     await db.commit()
+    await redis.enqueue_job("recompute_detections_task", str(user_id))
     return None

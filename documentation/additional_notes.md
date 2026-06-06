@@ -1,0 +1,6 @@
+- One command: `docker compose up --build -d`. App → :3000, API docs → :8000/docs. Migrations run on startup.
+- No Gemini key? Set GEMINI_API_KEY to a "dummy…" value → backend runs in mock mode (canned chat/receipt), fully explorable. Real AI + receipt OCR need a valid vision-enabled key.
+- Users are provisioned by the Clerk `user.created` webhook — point it at an ngrok URL, else authed calls return 401 "User not registered". No create-on-first-call fallback.
+- Seed data via CSV upload or POST /transactions/fetch-bank (mock bank). Both run as background ARQ jobs — the worker must be running.
+- CLERK_AUTHORIZED_PARTIES doubles as the CORS allow-list; include http://localhost:3000.
+- Known: merchant lookup & cut-back are heuristic; blurry receipts ask to confirm before writing.

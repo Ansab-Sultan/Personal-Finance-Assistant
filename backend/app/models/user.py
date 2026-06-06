@@ -16,3 +16,8 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     monthly_category_rollups = relationship("MonthlyCategoryRollup", back_populates="user", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
+    preferences = relationship("UserPreference", back_populates="user", cascade="all, delete-orphan")
+    chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
+    detected_subscriptions = relationship("DetectedSubscription", back_populates="user", cascade="all, delete-orphan")
+    flagged_anomalies = relationship("FlaggedAnomaly", back_populates="user", cascade="all, delete-orphan")
+

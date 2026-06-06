@@ -1,7 +1,11 @@
 import json
+from pathlib import Path
 from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+backend_dir = Path(__file__).resolve().parent.parent.parent
+env_file_path = backend_dir / ".env"
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables or a .env file."""
@@ -13,7 +17,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(env_file_path),
         env_file_encoding="utf-8",
         extra="ignore"
     )
