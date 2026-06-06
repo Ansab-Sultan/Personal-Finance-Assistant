@@ -61,6 +61,31 @@ async def spending_query_tool(
         "breakdown": category_breakdown
     }
 
+async def transactions_list_tool(
+    db: AsyncSession,
+    user_id: UUID,
+    limit: int = 5
+) -> Dict[str, Any]:
+    """Fetch the most recent transactions for a user, up to the given limit."""
+    query = select(Transaction).where(
+        Transaction.user_id == user_id
+    ).order_by(Transaction.date.desc()).limit(limit)
+    res = await db.execute(query)
+    txns = res.scalars().all()
+    return {
+        "count": len(txns),
+        "transactions": [
+            {
+                "date": t.date.isoformat(),
+                "merchant": t.merchant,
+                "category": t.category.value,
+                "amount": float(t.amount),
+                "currency": t.currency
+            }
+            for t in txns
+        ]
+    }
+
 async def budget_tracker_tool(
     db: AsyncSession,
     user_id: UUID,

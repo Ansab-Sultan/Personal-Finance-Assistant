@@ -48,9 +48,11 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
     
     try {
       const token = await getToken();
+      const parsedAmount = Math.abs(parseFloat(amount));
+      const isCredit = category === "income" || category === "transfer";
       const payload = {
         date,
-        amount: -Math.abs(parseFloat(amount)),
+        amount: isCredit ? parsedAmount : -parsedAmount,
         currency,
         merchant,
         raw_description: description || merchant,

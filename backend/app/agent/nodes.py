@@ -55,19 +55,21 @@ async def router_node(state: AgentState) -> Dict[str, Any]:
         f"Analyze the user's message: '{msg}'\n"
         f"Available preferences context: {state.get('system_instruction', '')}\n\n"
         "Classify the intent into one of the following:\n"
-        "- 'spending_query': Calculating spending totals for categories and periods.\n"
+        "- 'spending_query': Calculating spending totals for SPECIFIC categories and periods.\n"
         "- 'budget_check': Comparing spending vs limit for a category.\n"
         "- 'user_memory_write': Setting/saving a preference key (e.g. pay date, exclusions).\n"
         "- 'temporal_comparison': Comparing spending between two periods.\n"
         "- 'finance_summary': Category-wise rollup totals breakdown.\n"
+        "- 'transactions_list': User wants to see or list their recent transactions (no specific category filter).\n"
         "- 'subscriptions_read': Reading detected subscriptions.\n"
         "- 'anomalies_read': Reading flagged transaction anomalies.\n"
         "- 'cutback_suggestion': Recommendations on where to cut back.\n"
         "- 'merchant_lookup': Looking up details for a merchant.\n"
         "- 'out_of_domain': Off-topic questions (weather, general knowledge).\n\n"
         "Routing Decision Rules:\n"
-        "- Route to 'fast_lane' ONLY for simple lookups ('spending_query', 'budget_check', 'user_memory_write', 'temporal_comparison', 'subscriptions_read', 'anomalies_read') where a template can display the answer.\n"
+        "- Route to 'fast_lane' ONLY for simple lookups ('spending_query', 'budget_check', 'user_memory_write', 'temporal_comparison', 'subscriptions_read', 'anomalies_read', 'transactions_list') where a template can display the answer.\n"
         "- Route to 'react' for complex reasoning ('cutback_suggestion', 'merchant_lookup', 'finance_summary', 'out_of_domain', or multi-part/ambiguous requests).\n\n"
+        "IMPORTANT: If the user asks to list, show, or see their transactions without specifying a category or spending amount, use 'transactions_list'.\n"
         "Extract appropriate tool parameters (e.g. category, period, categories, merchant, key, value, action).\n"
         "If the query is out of range or unanswerable, classify the intent but set parameters accordingly."
     )
@@ -101,10 +103,10 @@ async def router_node(state: AgentState) -> Dict[str, Any]:
             intent = "anomalies_read"
             route = "fast_lane"
             params = {}
-        elif "weather" in msg.lower() or "politics" in msg.lower() or "off-topic" in msg.lower():
-            intent = "out_of_domain"
-            route = "react"
-            params = {}
+        elif "transaction" in msg.lower() or "show" in msg.lower() or "list" in msg.lower():
+            intent = "transactions_list"
+            route = "fast_lane"
+            params = {"limit": 5}
         return {
             "route": route,
             "intent": intent,
@@ -224,6 +226,20 @@ async def fast_lane_node(state: AgentState) -> Dict[str, Any]:
                 lines = ["Here are your flagged anomalies:"]
                 for a in anoms:
                     lines.append(f"- **{a['category']}**: ${a['amount']:.2f} — *{a['reason']}*")
+                ans = "\n".join(lines)
+            return {"response": ans}
+
+        elif intent == "transactions_list":
+            limit = int(params.get("limit") or 5)
+            res = await tools.transactions_list_tool(session, user_id, limit)
+            txns = res["transactions"]
+            if not txns:
+                ans = "You have no transactions yet."
+            else:
+                lines = [f"Here are your last {len(txns)} transactions:"]
+                for t in txns:
+                    sign = "+" if t["amount"] >= 0 else "-"
+                    lines.append(f"- **{t['merchant']}** ({t['category']}) on {t['date']}: {sign}${abs(t['amount']):.2f} {t['currency']}")
                 ans = "\n".join(lines)
             return {"response": ans}
             

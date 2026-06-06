@@ -119,10 +119,16 @@ export function useChat() {
     }
   }, [getToken]);
 
-  const clearMessages = useCallback(() => {
-    setMessages([]);
-    setError(null);
-  }, []);
+  const clearMessages = useCallback(async () => {
+    try {
+      const token = await getToken();
+      await fetchWithAuth("/api/v1/chat/history", { method: "DELETE", token });
+    } catch {
+    } finally {
+      setMessages([]);
+      setError(null);
+    }
+  }, [getToken]);
 
   return {
     messages,

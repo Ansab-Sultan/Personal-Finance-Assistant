@@ -2,6 +2,7 @@ from typing import List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, AsyncSessionLocal
@@ -23,6 +24,17 @@ async def get_chat_history(
 ):
     """Retrieve raw unsummarized chat messages for the current user's active thread."""
     return await chat_service.get_unsummarized_history(db, user_id)
+
+@router.delete("/history", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_chat_history(
+    user_id: UUID = Depends(get_db_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    """Permanently delete all chat messages and summaries for the current user."""
+    from app.models.chat import ChatMessage
+    await db.execute(delete(ChatMessage).where(ChatMessage.user_id == user_id))
+    await db.commit()
+    return None
 
 @router.post("")
 async def stream_chat(
