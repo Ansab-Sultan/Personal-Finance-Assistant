@@ -21,6 +21,16 @@ interface TransactionTableProps {
   onRefresh: () => void;
 }
 
+/** Format an amount in its own currency (proper symbol/placement), with a safe fallback. */
+const formatMoney = (amount: number, currency: string) => {
+  const code = (currency || "USD").toUpperCase();
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: code }).format(Math.abs(amount));
+  } catch {
+    return `${code} ${Math.abs(amount).toFixed(2)}`;
+  }
+};
+
 /**
  * Premium transaction ledger component with live filtering, pagination, and inline editing.
  */
@@ -230,7 +240,7 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
                     </td>
                     <td className="px-6 py-4 font-mono text-[10px] uppercase text-slate-450">{txn.source}</td>
                     <td className={`px-6 py-4 text-right font-bold font-mono ${txn.amount < 0 ? "text-rose-650" : "text-emerald-600"}`}>
-                      {txn.amount < 0 ? "-" : "+"}${Math.abs(txn.amount).toFixed(2)}
+                      {txn.amount < 0 ? "-" : "+"}{formatMoney(txn.amount, txn.currency)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex gap-2 justify-end">

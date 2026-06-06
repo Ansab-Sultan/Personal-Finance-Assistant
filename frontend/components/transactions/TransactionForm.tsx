@@ -135,7 +135,7 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Amount ($)</label>
+          <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Amount</label>
           <input
             type="number"
             step="0.01"
@@ -148,8 +148,8 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="col-span-2">
           <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Merchant</label>
           <input
             type="text"
@@ -160,6 +160,21 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
             className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           />
         </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Currency</label>
+          <input
+            type="text"
+            maxLength={3}
+            required
+            placeholder="USD"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+            className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm uppercase focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
         <div>
           <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Category</label>
           <select
