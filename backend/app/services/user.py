@@ -1,6 +1,7 @@
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 
 async def get_user_by_clerk_id(db: AsyncSession, clerk_id: str) -> User | None:
@@ -11,7 +12,6 @@ async def get_user_by_clerk_id(db: AsyncSession, clerk_id: str) -> User | None:
 
 async def create_user(db: AsyncSession, clerk_id: str, email: str) -> User:
     """Create a new user in the database."""
-    from sqlalchemy.exc import IntegrityError
     try:
         async with db.begin_nested():
             user = User(clerk_id=clerk_id, email=email)

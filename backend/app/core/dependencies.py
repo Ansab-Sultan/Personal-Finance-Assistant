@@ -1,8 +1,9 @@
 from fastapi import Depends, HTTPException, Request, status
 import httpx
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from clerk_backend_api.security.types import AuthStatus
 from arq import create_pool
 from arq.connections import RedisSettings
@@ -43,7 +44,6 @@ async def get_db_user_id(
     db: AsyncSession = Depends(get_db)
 ) -> UUID:
     """Dependency to look up the DB internal UUID for the authenticated user, auto-creating it if not found."""
-    from sqlalchemy.exc import IntegrityError
     query = select(User.id).where(User.clerk_id == clerk_id)
     result = await db.execute(query)
     user_id = result.scalar_one_or_none()

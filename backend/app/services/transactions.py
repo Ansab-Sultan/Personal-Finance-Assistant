@@ -1,8 +1,11 @@
+import calendar
 from datetime import date
 from typing import Any, Dict, List, Optional
 from uuid import UUID
+from sqlalchemy import and_, desc, select, update, delete, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, func
+from app.core.exceptions import DuplicateTransactionError
 from app.models.transaction import Transaction, MonthlyCategoryRollup
 from app.services.deduplication import compute_transaction_hash
 
@@ -19,7 +22,6 @@ async def adjust_rollup(
     count_delta: int
 ) -> None:
     """Adjust the monthly category rollup bucket (increment or decrement)."""
-    from sqlalchemy.exc import IntegrityError
     query = select(MonthlyCategoryRollup).where(
         MonthlyCategoryRollup.user_id == user_id,
         MonthlyCategoryRollup.month == month,
@@ -168,7 +170,6 @@ async def refresh_monthly_rollups(
         return
         
     if months_categories:
-        import calendar
         for month, category in months_categories:
             year = int(month[:4])
             m = int(month[5:7])
@@ -244,8 +245,7 @@ async def list_transactions(
     merchant: Optional[str] = None
 ) -> tuple[List[Transaction], int]:
     """Retrieve filtered and paginated transactions for a user, along with the total count."""
-    from sqlalchemy import and_, desc
-    
+
     conditions = [Transaction.user_id == user_id]
     if start_date:
         conditions.append(Transaction.date >= start_date)
@@ -275,9 +275,7 @@ async def create_manual_transaction(
     force: bool
 ) -> Transaction:
     """Create a manual transaction with duplicate validation checking."""
-    from app.services.deduplication import compute_transaction_hash
-    from app.core.exceptions import DuplicateTransactionError
-    
+
     txn_dict = dict(txn_data)
     txn_dict["source"] = "manual"
     

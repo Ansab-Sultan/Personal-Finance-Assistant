@@ -1,11 +1,12 @@
 from datetime import date
 from typing import List, Optional, Dict, Any
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.budget import Budget, BudgetPeriod
 from app.models.transaction import TransactionCategory, MonthlyCategoryRollup
+from app.services.memory import get_preference_by_key
 
 async def compute_budget_status(
     session: AsyncSession,
@@ -46,7 +47,6 @@ async def compute_budget_status(
             spent_sum = abs(float(val))
             
     if category == TransactionCategory.restaurants:
-        from app.services.memory import get_preference_by_key
         exclude_cat_name = await get_preference_by_key(session, user_id, "exclude_from_food")
         if exclude_cat_name:
             try:
@@ -106,7 +106,6 @@ async def create_or_update_budget(
     period: BudgetPeriod
 ) -> Budget:
     """Create a new budget or update an existing one for the same user, category and period."""
-    from sqlalchemy.exc import IntegrityError
     query = select(Budget).where(
         Budget.user_id == user_id,
         Budget.category == category,

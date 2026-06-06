@@ -1,8 +1,12 @@
+import asyncio
 import base64
+import json
 from typing import Dict, Any
-from pydantic import BaseModel, Field
+from google import genai
 from google.genai import types
+from pydantic import BaseModel, Field
 from app.core.config import settings
+from app.core.llm_config import llm_config
 from app.services.llm import llm_client
 
 class ReceiptParseResult(BaseModel):
@@ -30,7 +34,6 @@ async def parse_receipt_image(image_base64: str, mime_type: str = "image/jpeg") 
         
     image_bytes = base64.b64decode(cleaned_base64)
     
-    from google import genai
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     
     prompt = (
@@ -39,13 +42,12 @@ async def parse_receipt_image(image_base64: str, mime_type: str = "image/jpeg") 
         "extraction confidence score (0.0 to 1.0). Return the response in strict JSON format."
     )
     
-    import asyncio
     loop = asyncio.get_event_loop()
     
     response = await loop.run_in_executor(
         None,
         lambda: client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=llm_config.model,
             contents=[
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 prompt
@@ -58,6 +60,5 @@ async def parse_receipt_image(image_base64: str, mime_type: str = "image/jpeg") 
         )
     )
     
-    import json
     result_text = response.text.strip()
     return json.loads(result_text)

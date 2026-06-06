@@ -1,8 +1,8 @@
 from typing import List, Optional
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.preference import UserPreference
 
 async def get_preferences(session: AsyncSession, user_id: UUID) -> List[UserPreference]:
@@ -31,7 +31,6 @@ async def upsert_preference(
     value: str
 ) -> UserPreference:
     """Create or update a user preference (upsert)."""
-    from sqlalchemy.exc import IntegrityError
     query = select(UserPreference).where(
         UserPreference.user_id == user_id,
         UserPreference.key == key

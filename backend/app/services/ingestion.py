@@ -1,9 +1,11 @@
 import csv
 import io
+import uuid
 from datetime import date
 from typing import Any, Dict, List, Tuple, Set
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.transaction import Transaction
 from app.services.normalizer import normalize_transaction_data, parse_date, parse_amount
 from app.services.deduplication import compute_transaction_hash, find_existing_hashes, find_near_duplicates
 from app.services.transactions import create_transaction, refresh_monthly_rollups, get_month_str
@@ -160,9 +162,7 @@ async def ingest_transactions(
         for d in near_dupes
     ]
     
-    from app.models.transaction import Transaction
-    import uuid
-    
+
     db_txns = []
     affected_buckets = set()
     for txn in to_insert:

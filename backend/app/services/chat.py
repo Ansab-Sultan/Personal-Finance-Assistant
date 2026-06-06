@@ -1,10 +1,10 @@
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+from sqlalchemy import select, func, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update
-
 from app.models.chat import ChatMessage, MessageRole
-from app.services.llm import GeminiClient
+from app.services.llm import GeminiClient, llm_client
+from app.services.memory import get_preferences
 
 RECENT_TURNS = 20
 SUMMARIZE_THRESHOLD = 40
@@ -65,7 +65,6 @@ async def get_summary_row(session: AsyncSession, user_id: UUID) -> Optional[Chat
 
 async def upsert_summary(session: AsyncSession, user_id: UUID, content: str) -> ChatMessage:
     """Insert a running summary row or update it if it already exists."""
-    from sqlalchemy import delete
     summary_row = await get_summary_row(session, user_id)
     if summary_row:
         summary_row.content = content
@@ -139,9 +138,6 @@ async def get_chat_context(
     user_id: UUID
 ) -> tuple[List[Dict[str, str]], str]:
     """Fetch user preferences, system instructions, running summaries, and recent messages for the LLM context."""
-    from app.services.memory import get_preferences
-    from app.services.llm import llm_client
-    
     summary = await maybe_refresh_summary(session, user_id, llm_client)
     prefs = await get_preferences(session, user_id)
     prefs_str = "\n".join([f"- {p.key}: {p.value}" for p in prefs])
