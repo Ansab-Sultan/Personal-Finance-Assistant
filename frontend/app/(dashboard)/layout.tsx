@@ -31,14 +31,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   return (
-    <div className="flex h-screen bg-zinc-955 font-sans text-zinc-200">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/10 via-zinc-955 to-zinc-955 pointer-events-none" />
-      <aside className="w-64 border-r border-zinc-900 bg-zinc-905 flex flex-col z-10">
-        <div className="p-6 border-b border-zinc-900 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/10">
-            <span className="text-white font-extrabold text-sm">R</span>
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-800 relative">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/5 via-slate-50 to-slate-50 pointer-events-none" />
+      <aside className="w-64 border-r border-slate-200/80 bg-white flex flex-col z-10 relative">
+        <div className="p-6 border-b border-slate-100 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-600/10">
+            <span className="text-white font-extrabold text-sm">P</span>
           </div>
-          <span className="text-lg font-bold tracking-tight text-white">Revonix</span>
+          <span className="text-lg font-bold tracking-tight text-slate-900">Personal Finance Assistant</span>
         </div>
         <nav className="flex-1 p-4 space-y-1">
           {navigation.map((item) => {
@@ -47,35 +47,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? "bg-zinc-900 border border-zinc-800 text-white"
-                    : "text-zinc-400 hover:text-zinc-250 hover:bg-zinc-950/40"
+                    ? "bg-indigo-50/60 border border-indigo-100/80 text-indigo-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/50 border border-transparent"
                 }`}
               >
-                {item.icon}
+                <span className={`transition-colors duration-200 ${isActive ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-650"}`}>
+                  {item.icon}
+                </span>
                 {item.name}
               </Link>
             );
           })}
         </nav>
-        <div className="p-4 border-t border-zinc-900 flex items-center justify-between">
+        <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-white/50">
           <div className="flex items-center gap-3 min-w-0">
             <UserButton />
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{user?.fullName || "User Profile"}</p>
-              <p className="text-[10px] text-zinc-500 truncate">{user?.primaryEmailAddress?.emailAddress || ""}</p>
+              <p className="text-xs font-semibold text-slate-900 truncate">{user?.fullName || "User Profile"}</p>
+              <p className="text-[10px] text-slate-500 truncate">{user?.primaryEmailAddress?.emailAddress || ""}</p>
             </div>
           </div>
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto z-10 flex flex-col">
-        <header className="h-16 border-b border-zinc-900 flex items-center justify-between px-8 bg-zinc-905/30 backdrop-blur-md">
-          <h2 className="text-base font-bold text-white tracking-wide">
+        <header className="h-16 border-b border-slate-200/80 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md sticky top-0 z-20">
+          <h2 className="text-base font-bold text-slate-900 tracking-wide">
             {pathname === "/budgets" ? "Budget Tracker" : pathname === "/chat" ? "AI Financial Assistant" : "Financial Ledger"}
           </h2>
           <div className="flex items-center gap-4">
-            <span className="text-xs bg-zinc-900 px-3 py-1 rounded-full border border-zinc-850 text-zinc-400 font-medium">
+            <span className="text-xs bg-slate-100 px-3 py-1 rounded-full border border-slate-200 text-slate-650 font-medium shadow-2xs">
               Mode: Development
             </span>
           </div>

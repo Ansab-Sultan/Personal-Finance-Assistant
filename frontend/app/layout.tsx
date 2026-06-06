@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Revonix Personal Finance Assistant",
+  title: "Personal Finance Assistant",
   description: "A premium AI-powered personal finance tracker and assistant.",
 };
 
@@ -37,3 +37,4 @@ export default function RootLayout({
     </ClerkProvider>
   );
 }
+

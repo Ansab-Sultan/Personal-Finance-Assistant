@@ -82,38 +82,38 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
   };
 
   return (
-    <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4 text-zinc-300">
-      <h3 className="text-lg font-bold text-white mb-2">
+    <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4 text-slate-700">
+      <h3 className="text-lg font-bold text-slate-900 mb-2">
         {transaction ? "Edit Transaction" : "Add Manual Transaction"}
       </h3>
       
       {error && (
-        <div className="p-3 bg-red-950/30 border border-red-800 text-red-400 rounded-xl text-xs">
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-605 rounded-xl text-xs">
           {error}
         </div>
       )}
 
       {conflict && (
-        <div className="p-4 bg-amber-950/20 border border-amber-900/30 rounded-xl text-xs space-y-3">
-          <p className="text-amber-400 font-semibold">Potential duplicate transaction found:</p>
-          <div className="bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-800 text-zinc-400">
-            <p>Merchant: <span className="text-white">{conflict.merchant}</span></p>
-            <p>Date: <span className="text-white">{conflict.date}</span></p>
-            <p>Amount: <span className="text-white">${conflict.amount}</span></p>
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-3 shadow-2xs">
+          <p className="text-amber-700 font-semibold">Potential duplicate transaction found:</p>
+          <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-slate-600 space-y-1 shadow-3xs">
+            <p>Merchant: <span className="text-slate-900 font-medium">{conflict.merchant}</span></p>
+            <p>Date: <span className="text-slate-900 font-medium">{conflict.date}</span></p>
+            <p>Amount: <span className="text-slate-900 font-semibold">${conflict.amount}</span></p>
           </div>
-          <p className="text-zinc-400">Are you sure you want to add this transaction anyway?</p>
+          <p className="text-slate-600">Are you sure you want to add this transaction anyway?</p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={(e) => handleSubmit(e, true)}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg transition-all"
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-all cursor-pointer shadow-sm"
             >
               Yes, Add it
             </button>
             <button
               type="button"
               onClick={() => setConflict(null)}
-              className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg transition-all border border-zinc-800"
+              className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-lg transition-all border border-slate-205 cursor-pointer shadow-2xs"
             >
               Cancel
             </button>
@@ -123,17 +123,17 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">Date</label>
+          <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Date</label>
           <input
             type="date"
             required
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full bg-zinc-955 border border-zinc-800 text-white rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">Amount ($)</label>
+          <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Amount ($)</label>
           <input
             type="number"
             step="0.01"
@@ -141,29 +141,29 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
             placeholder="0.00"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-full bg-zinc-955 border border-zinc-800 text-white rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">Merchant</label>
+          <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Merchant</label>
           <input
             type="text"
             required
             placeholder="E.g., Starbucks"
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}
-            className="w-full bg-zinc-955 border border-zinc-800 text-white rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">Category</label>
+          <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Category</label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full bg-zinc-955 border border-zinc-800 text-white rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+            className="w-full bg-white border border-slate-200 text-slate-850 rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer"
           >
             <option value="groceries">Groceries</option>
             <option value="restaurants">Restaurants</option>
@@ -185,13 +185,13 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">Description / Memo</label>
+        <label className="block text-xs font-semibold text-slate-505 uppercase tracking-wider mb-1">Description / Memo</label>
         <input
           type="text"
           placeholder="E.g., Dinner with team"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full bg-zinc-955 border border-zinc-800 text-white rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+          className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
         />
       </div>
 
@@ -199,14 +199,14 @@ export default function TransactionForm({ transaction, onSuccess, onCancel }: Tr
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-medium rounded-xl border border-zinc-800 transition-all text-sm"
+          className="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-650 font-medium rounded-xl border border-slate-200 transition-all text-sm cursor-pointer"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={loading || !!conflict}
-          className="px-4 py-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:opacity-95 text-white font-medium rounded-xl transition-all shadow-lg shadow-indigo-500/10 text-sm disabled:opacity-50"
+          className="px-4 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-650 hover:opacity-95 text-white font-medium rounded-xl transition-all shadow-md shadow-indigo-600/10 text-sm disabled:opacity-50 cursor-pointer"
         >
           {loading ? "Saving..." : "Save"}
         </button>

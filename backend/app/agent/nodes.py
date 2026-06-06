@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any
 from uuid import UUID
 from pydantic import BaseModel, Field
 
@@ -13,16 +13,24 @@ from google import genai
 from google.genai import types
 
 class RouterOutput(BaseModel):
-    """Pydantic model representing structured classification output from the router."""
+    """Pydantic model representing structured classification output from the router.
+
+    The tool_parameters field is a JSON-encoded string to avoid additionalProperties
+    in the schema, which is unsupported by the Gemini Developer API.
+    """
     route: str = Field(description="Must be either 'fast_lane' or 'react'")
     intent: str = Field(description="Identified intent, e.g. spending_query, budget_check, user_memory_write, temporal_comparison, finance_summary, subscriptions_read, anomalies_read, receipt_ocr, cutback_suggestion, merchant_lookup, out_of_domain")
-    tool_parameters: Dict[str, Any] = Field(default_factory=dict, description="Extracted parameters for the tool")
+    tool_parameters: str = Field(default="{}", description="JSON-encoded string of extracted parameters for the tool, e.g. '{\"category\": \"groceries\", \"period\": \"monthly\"}'")
 
 class AgentStepOutput(BaseModel):
-    """Pydantic model representing a single step of reasoning in the ReAct loop."""
+    """Pydantic model representing a single step of reasoning in the ReAct loop.
+
+    The action_input field is a JSON-encoded string to avoid additionalProperties
+    in the schema, which is unsupported by the Gemini Developer API.
+    """
     thought: str = Field(description="The model's current reasoning about what to do next")
     action: str = Field(description="The name of the tool to execute, or 'none' if finished")
-    action_input: Dict[str, Any] = Field(default_factory=dict, description="Parameters to pass to the tool")
+    action_input: str = Field(default="{}", description="JSON-encoded string of parameters to pass to the tool, e.g. '{\"categories\": [\"groceries\"], \"period\": \"monthly\"}'")
     final_answer: str = Field(default="", description="The final plain English answer to the user")
 
 async def router_node(state: AgentState) -> Dict[str, Any]:
@@ -120,10 +128,18 @@ async def router_node(state: AgentState) -> Dict[str, Any]:
     )
     
     result = json.loads(response.text.strip())
+    raw_params = result.get("tool_parameters") or "{}"
+    if isinstance(raw_params, str):
+        try:
+            parsed_params = json.loads(raw_params)
+        except (json.JSONDecodeError, ValueError):
+            parsed_params = {}
+    else:
+        parsed_params = raw_params
     return {
         "route": result["route"],
         "intent": result["intent"],
-        "tool_parameters": result.get("tool_parameters") or {}
+        "tool_parameters": parsed_params
     }
 
 async def fast_lane_node(state: AgentState) -> Dict[str, Any]:
@@ -297,8 +313,15 @@ async def react_agent_node(state: AgentState) -> Dict[str, Any]:
             
             if action == "none" or not action:
                 return {"response": res.get("final_answer", "")}
-                
-            args = res.get("action_input") or {}
+
+            raw_args = res.get("action_input") or "{}"
+            if isinstance(raw_args, str):
+                try:
+                    args = json.loads(raw_args)
+                except (json.JSONDecodeError, ValueError):
+                    args = {}
+            else:
+                args = raw_args
             
             try:
                 if action == "spending_query_tool":

@@ -97,22 +97,22 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
   const totalPages = Math.ceil(total / size);
 
   return (
-    <div className="w-full flex flex-col gap-4 text-zinc-300">
-      <div className="p-4 bg-zinc-900/40 backdrop-blur-xl border border-zinc-800 rounded-2xl flex flex-wrap gap-4 items-end justify-between shadow-lg">
+    <div className="w-full flex flex-col gap-4 text-slate-700">
+      <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex flex-wrap gap-4 items-end justify-between shadow-xs">
         <form onSubmit={handleSearchSubmit} className="flex flex-wrap gap-3 items-end">
           <div>
-            <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Search Merchant</label>
+            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Search Merchant</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 placeholder="E.g., Whole Foods"
                 value={merchantSearch}
                 onChange={(e) => setMerchantSearch(e.target.value)}
-                className="bg-zinc-950 border border-zinc-800 text-white text-xs rounded-xl px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-48"
+                className="bg-white border border-slate-200 text-slate-800 placeholder-slate-400 text-xs rounded-xl px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-48"
               />
               <button
                 type="submit"
-                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white font-medium rounded-xl text-xs border border-zinc-800 transition-all"
+                className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-xl text-xs border border-slate-200 transition-all cursor-pointer"
               >
                 Search
               </button>
@@ -120,14 +120,14 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
           </div>
 
           <div>
-            <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Category</label>
+            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Category</label>
             <select
               value={category}
               onChange={(e) => {
                 setCategory(e.target.value);
                 setPage(1);
               }}
-              className="bg-zinc-955 border border-zinc-800 text-white text-xs rounded-xl px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="bg-white border border-slate-200 text-slate-850 text-xs rounded-xl px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer"
             >
               <option value="">All Categories</option>
               <option value="groceries">Groceries</option>
@@ -149,7 +149,7 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
           </div>
 
           <div>
-            <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Start Date</label>
+            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Start Date</label>
             <input
               type="date"
               value={startDate}
@@ -157,12 +157,12 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
                 setStartDate(e.target.value);
                 setPage(1);
               }}
-              className="bg-zinc-955 border border-zinc-800 text-white text-xs rounded-xl px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">End Date</label>
+            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">End Date</label>
             <input
               type="date"
               value={endDate}
@@ -170,7 +170,7 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
                 setEndDate(e.target.value);
                 setPage(1);
               }}
-              className="bg-zinc-955 border border-zinc-800 text-white text-xs rounded-xl px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="bg-white border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer"
             />
           </div>
         </form>
@@ -180,7 +180,7 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
             setEditingTransaction(null);
             setIsFormOpen(true);
           }}
-          className="px-4 py-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:opacity-95 text-white font-medium rounded-xl text-xs transition-all shadow-lg shadow-indigo-500/10 flex items-center gap-1.5"
+          className="px-4 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-650 hover:opacity-95 text-white font-medium rounded-xl text-xs transition-all shadow-md shadow-indigo-600/10 flex items-center gap-1.5 cursor-pointer"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -189,11 +189,11 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
         </button>
       </div>
 
-      <div className="bg-zinc-900/40 backdrop-blur-xl border border-zinc-800 rounded-2xl overflow-hidden shadow-lg">
+      <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-950/40 text-zinc-400 text-[10px] font-semibold uppercase tracking-wider">
+              <tr className="border-b border-slate-100 bg-slate-50/50 text-slate-500 text-[10px] font-semibold uppercase tracking-wider">
                 <th className="px-6 py-4">Date</th>
                 <th className="px-6 py-4">Merchant</th>
                 <th className="px-6 py-4">Category</th>
@@ -202,34 +202,34 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-850 text-xs text-zinc-300">
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-zinc-500 font-medium">
+                  <td colSpan={6} className="px-6 py-10 text-center text-slate-400 font-medium">
                     Loading transactions...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-zinc-500 font-medium">
+                  <td colSpan={6} className="px-6 py-10 text-center text-slate-450 font-medium">
                     No transactions found.
                   </td>
                 </tr>
               ) : (
                 items.map((txn) => (
-                  <tr key={txn.id} className="hover:bg-zinc-950/30 transition-colors">
-                    <td className="px-6 py-4 font-mono text-zinc-400">{txn.date}</td>
+                  <tr key={txn.id} className="hover:bg-slate-50/40 transition-colors">
+                    <td className="px-6 py-4 font-mono text-slate-500">{txn.date}</td>
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-white">{txn.merchant}</div>
-                      <div className="text-[10px] text-zinc-500 max-w-xs truncate">{txn.raw_description}</div>
+                      <div className="font-semibold text-slate-900">{txn.merchant}</div>
+                      <div className="text-[10px] text-slate-400 max-w-xs truncate">{txn.raw_description}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 border border-zinc-700 text-zinc-300 capitalize">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 border border-slate-200 text-slate-700 capitalize">
                         {txn.category}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-mono text-[10px] uppercase text-zinc-400">{txn.source}</td>
-                    <td className={`px-6 py-4 text-right font-bold font-mono ${txn.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                    <td className="px-6 py-4 font-mono text-[10px] uppercase text-slate-450">{txn.source}</td>
+                    <td className={`px-6 py-4 text-right font-bold font-mono ${txn.amount < 0 ? "text-rose-650" : "text-emerald-600"}`}>
                       {txn.amount < 0 ? "-" : "+"}${Math.abs(txn.amount).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -239,7 +239,7 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
                             setEditingTransaction(txn);
                             setIsFormOpen(true);
                           }}
-                          className="p-1 text-zinc-400 hover:text-indigo-400 hover:bg-zinc-900 border border-transparent hover:border-zinc-850 rounded-lg transition-all"
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 border border-transparent hover:border-slate-200 rounded-lg transition-all cursor-pointer"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -247,7 +247,7 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
                         </button>
                         <button
                           onClick={() => handleDelete(txn.id)}
-                          className="p-1 text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 border border-transparent hover:border-zinc-850 rounded-lg transition-all"
+                          className="p-1 text-slate-400 hover:text-rose-650 hover:bg-slate-50 border border-transparent hover:border-slate-200 rounded-lg transition-all cursor-pointer"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -263,22 +263,22 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
         </div>
 
         {totalPages > 1 && (
-          <div className="px-6 py-4 bg-zinc-950/20 border-t border-zinc-850 flex items-center justify-between">
-            <span className="text-[11px] text-zinc-500 font-medium">
+          <div className="px-6 py-4 bg-slate-50/30 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[11px] text-slate-500 font-medium">
               Showing page {page} of {totalPages} ({total} items total)
             </span>
             <div className="flex gap-2">
               <button
                 disabled={page === 1}
                 onClick={() => setPage(page - 1)}
-                className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800 rounded-xl text-xs font-semibold transition-all"
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 disabled:opacity-50 hover:bg-slate-50 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
                 Previous
               </button>
               <button
                 disabled={page === totalPages}
                 onClick={() => setPage(page + 1)}
-                className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800 rounded-xl text-xs font-semibold transition-all"
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 disabled:opacity-50 hover:bg-slate-50 rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
                 Next
               </button>
@@ -288,8 +288,8 @@ export default function TransactionTable({ refreshTrigger, onRefresh }: Transact
       </div>
 
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-zinc-905 border border-zinc-800 rounded-2xl shadow-2xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 relative">
             <TransactionForm
               transaction={editingTransaction}
               onSuccess={() => {

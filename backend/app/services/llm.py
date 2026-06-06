@@ -26,7 +26,7 @@ class GeminiClient:
         """Generate a streaming response for the chat thread."""
         if self.is_mock:
             reply = (
-                "Hello! This is a mock response from the Revonix assistant. "
+                "Hello! This is a mock response from the Personal Finance Assistant. "
                 "I am running in mock mode because a dummy Gemini API key is configured. "
                 "However, all chat message history, rolling summaries, and preferences are fully operational in the database!"
             )

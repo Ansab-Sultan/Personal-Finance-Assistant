@@ -34,16 +34,16 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8 text-zinc-300">
+    <div className="flex flex-col gap-8 text-slate-700">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Transactions</h1>
-          <p className="text-sm text-zinc-400 mt-1">Review, import, or manage your cash flow.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Transactions</h1>
+          <p className="text-sm text-slate-500 mt-1">Review, import, or manage your cash flow.</p>
         </div>
         <button
           onClick={handleSyncBank}
           disabled={bankLoading}
-          className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white font-medium rounded-xl text-xs border border-zinc-800 transition-all shadow-md flex items-center gap-1.5"
+          className="px-4 py-2 bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-750 font-medium rounded-xl text-xs border border-slate-200 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${bankLoading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.228 10H16.29" />
