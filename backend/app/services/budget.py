@@ -16,7 +16,7 @@ async def compute_budget_status(
     user_id: UUID,
     category: TransactionCategory,
     period: BudgetPeriod,
-    limit_amount: float
+    limit_amount: Optional[float]
 ) -> Dict[str, Any]:
     """Compute current spent vs. limit status for a given category and period.
     
@@ -24,7 +24,7 @@ async def compute_budget_status(
     when that module is implemented.
     """
     logger.debug(
-        "Computing budget status — user_id=%s category=%s period=%s limit=%.2f",
+        "Computing budget status — user_id=%s category=%s period=%s limit=%s",
         user_id, category, period, limit_amount
     )
     spent_sum = 0.0
@@ -85,25 +85,40 @@ async def compute_budget_status(
             except ValueError:
                 pass
                 
-    remaining = max(0.0, limit_amount - spent_sum)
-    ratio = spent_sum / limit_amount if limit_amount > 0 else 0.0
-    
-    if ratio < 0.8:
-        state = "ok"
-    elif ratio <= 1.0:
-        state = "warning"
+    if limit_amount is None:
+        state = "not_configured"
+        remaining = 0.0
+        ratio = 0.0
+    elif limit_amount == 0.0:
+        if spent_sum > 0.0:
+            state = "over"
+            ratio = float("inf")
+            remaining = 0.0
+        else:
+            state = "ok"
+            ratio = 0.0
+            remaining = 0.0
     else:
-        state = "over"
+        remaining = max(0.0, limit_amount - spent_sum)
+        ratio = spent_sum / limit_amount
+        
+        if ratio < 0.8:
+            state = "ok"
+        elif ratio <= 1.0:
+            state = "warning"
+        else:
+            state = "over"
         
     return {
         "category": category,
         "period": period,
         "spent": spent_sum,
-        "limit": limit_amount,
+        "limit": limit_amount if limit_amount is not None else 0.0,
         "remaining": remaining,
         "ratio": ratio,
         "state": state
     }
+
 
 async def create_or_update_budget(
     session: AsyncSession,
@@ -216,8 +231,8 @@ async def get_budget_limit(
     user_id: UUID,
     category: TransactionCategory,
     period: BudgetPeriod
-) -> float:
-    """Calculate budget limit for a specific category and period, returning 0.0 if not configured."""
+) -> Optional[float]:
+    """Calculate budget limit for a specific category and period, returning None if not configured."""
     query = select(Budget.limit_amount).where(
         Budget.user_id == user_id,
         Budget.category == category,
@@ -225,5 +240,6 @@ async def get_budget_limit(
     )
     res = await session.execute(query)
     limit_val = res.scalar_one_or_none()
-    return float(limit_val) if limit_val is not None else 0.0
+    return float(limit_val) if limit_val is not None else None
+
 

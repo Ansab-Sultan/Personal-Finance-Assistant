@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import CsvUploader from "../../../components/transactions/CsvUploader";
+import ReceiptScanner from "../../../components/transactions/ReceiptScanner";
 import TransactionTable from "../../../components/transactions/TransactionTable";
 import { useAuth } from "@clerk/nextjs";
 import { fetchWithAuth } from "../../../lib/api";
@@ -91,8 +92,9 @@ export default function TransactionsPage() {
             onRefresh={handleRefresh}
           />
         </div>
-        <div>
+        <div className="space-y-8">
           <CsvUploader onUploadSuccess={handleRefresh} />
+          <ReceiptScanner onSaveSuccess={handleRefresh} />
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,10 @@ from arq.jobs import Job
 from app.core.database import get_db
 from app.core.dependencies import get_db_user_id, get_redis_pool
 from app.core.logger import get_logger
-from app.schemas.transaction import TransactionRead, TransactionCreate, TransactionUpdate, TransactionPaginated, ReceiptParseRequest
+from app.schemas.transaction import (
+    TransactionRead, TransactionCreate, TransactionUpdate, TransactionPaginated,
+    ReceiptParseRequest, DetectedSubscriptionRead, FlaggedAnomalyRead,
+)
 from app.services import transactions as txn_service
 from app.services.ingestion import parse_csv_stream, ingest_transactions, fetch_mock_bank_data
 from app.services.normalizer import normalize_transaction_data
@@ -151,7 +154,7 @@ async def list_transactions(
     }
 
 
-@router.get("/subscriptions")
+@router.get("/subscriptions", response_model=List[DetectedSubscriptionRead])
 async def get_user_subscriptions(
     user_id: UUID = Depends(get_db_user_id),
     db: AsyncSession = Depends(get_db)
@@ -162,7 +165,7 @@ async def get_user_subscriptions(
     return await get_detected_subscriptions(db, user_id)
 
 
-@router.get("/anomalies")
+@router.get("/anomalies", response_model=List[FlaggedAnomalyRead])
 async def get_user_anomalies(
     user_id: UUID = Depends(get_db_user_id),
     db: AsyncSession = Depends(get_db)

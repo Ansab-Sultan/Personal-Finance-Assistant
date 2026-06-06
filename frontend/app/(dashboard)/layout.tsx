@@ -23,6 +23,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     )},
+    { name: "Insights", href: "/insights", icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    )},
     { name: "Chat", href: "/chat", icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -74,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 overflow-y-auto z-10 flex flex-col">
         <header className="h-16 border-b border-slate-200/80 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md sticky top-0 z-20">
           <h2 className="text-base font-bold text-slate-900 tracking-wide">
-            {pathname === "/budgets" ? "Budget Tracker" : pathname === "/chat" ? "AI Financial Assistant" : "Financial Ledger"}
+            {pathname === "/budgets" ? "Budget Tracker" : pathname === "/insights" ? "Insights" : pathname === "/chat" ? "AI Financial Assistant" : "Financial Ledger"}
           </h2>
           <div className="flex items-center gap-4">
             <span className="text-xs bg-slate-100 px-3 py-1 rounded-full border border-slate-200 text-slate-650 font-medium shadow-2xs">

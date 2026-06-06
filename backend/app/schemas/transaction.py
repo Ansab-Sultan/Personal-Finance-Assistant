@@ -48,3 +48,28 @@ class ReceiptParseRequest(BaseModel):
     image_base64: str = Field(..., description="Base64 encoded receipt image")
     mime_type: str = Field("image/jpeg", description="MIME type of the image")
 
+
+class DetectedSubscriptionRead(BaseModel):
+    """Pydantic schema for a precomputed recurring-subscription detection."""
+    id: UUID
+    merchant: str
+    amount: float
+    cadence_days: int
+    last_seen: date_type
+    confidence: float
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FlaggedAnomalyRead(BaseModel):
+    """Pydantic schema for a precomputed flagged-anomaly record."""
+    id: UUID
+    transaction_id: UUID
+    category: TransactionCategory
+    amount: float
+    reason: str
+    detected_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+

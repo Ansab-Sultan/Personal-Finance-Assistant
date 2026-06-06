@@ -183,11 +183,14 @@ async def fast_lane_node(state: AgentState) -> Dict[str, Any]:
             period = params.get("period") or "monthly"
             
             res = await tools.budget_tracker_tool(session, user_id, cat, period)
-            ans = (
-                f"Your budget status for **{cat}** ({period}) is **{res['state'].upper()}**. "
-                f"Spent: **${res['spent']:.2f}** of limit **${res['limit']:.2f}**. "
-                f"Remaining: **${res['remaining']:.2f}**."
-            )
+            if res["state"] == "not_configured":
+                ans = f"You don't have a **{cat}** budget configured for this period. However, you have spent **${res['spent']:.2f}** on **{cat}**."
+            else:
+                ans = (
+                    f"Your budget status for **{cat}** ({period}) is **{res['state'].upper()}**. "
+                    f"Spent: **${res['spent']:.2f}** of limit **${res['limit']:.2f}**. "
+                    f"Remaining: **${res['remaining']:.2f}**."
+                )
             return {"response": ans}
             
         elif intent == "user_memory_write" or intent == "user_memory":
