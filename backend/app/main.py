@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.exceptions import AuthException, auth_exception_handler
-from app.routers import auth, users
+from app.routers import auth, users, transactions, budget
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -23,6 +23,8 @@ def create_app() -> FastAPI:
     
     app.include_router(auth.router)
     app.include_router(users.router)
+    app.include_router(transactions.router)
+    app.include_router(budget.router)
     
     @app.get("/health")
     async def health_check():

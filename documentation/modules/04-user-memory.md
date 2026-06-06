@@ -13,12 +13,27 @@
 ## Data
 
 ```sql
-user_preferences (id, user_id, key, value, updated_at)
+user_preferences (
+  id, user_id,
+  key    TEXT NOT NULL CHECK (key IN (
+           'pay_date',            -- day of month user gets paid, e.g. "1"
+           'exclude_from_food',   -- category name to exclude from food spend, e.g. "rent"
+           'currency_display',    -- 3-letter ISO code for display formatting, e.g. "PKR"
+           'pay_cycle_start'      -- alternative to pay_date for bi-weekly etc., e.g. "2024-06-01"
+         )),
+  value  TEXT NOT NULL,
+  updated_at TIMESTAMPTZ
+)
 -- unique(user_id, key)  → upsert on write
 ```
 
+> **Not a Postgres ENUM** — using a CHECK constraint instead keeps the allowed-key list in one
+> readable place and lets you add a new key via an Alembic `ALTER TABLE … DROP CONSTRAINT / ADD
+> CONSTRAINT` rather than `ALTER TYPE … ADD VALUE`. Same enforcement, easier to evolve.
+
 A flat key-value store is deliberate: it's open-ended (the user can state anything) and trivial to
-read on each request. Examples:
+read on each request. The CHECK constraint is the boundary — unknown keys are rejected before they
+reach the service layer. Examples:
 
 | key | value | meaning |
 |-----|-------|---------|
@@ -26,8 +41,9 @@ read on each request. Examples:
 | `exclude_from_food` | `"rent"` | exclude rent from the food budget figure |
 | `currency_display` | `"PKR"` | how to format money back to the user |
 
-> Keep keys to a **small known vocabulary** the assistant writes to (not free-form per message), so
-> reads are predictable and applying them is deterministic. Document the vocabulary.
+> The known-key vocabulary is documented in the README. When the assistant hears a preference it
+> cannot map to a key, it acknowledges without storing junk — the CHECK constraint is the last-line
+> backstop if that check is somehow bypassed.
 
 ---
 

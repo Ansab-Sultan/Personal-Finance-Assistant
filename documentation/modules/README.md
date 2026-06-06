@@ -12,7 +12,7 @@ orchestrates, and its routing shape is still being designed.
 | # | Module | Depends on | Brief mapping |
 |---|--------|-----------|---------------|
 | 01 | [Setup & Authentication (Clerk)](./01-setup-and-auth.md) | — | §2 Accounts & sign-in, multi-user |
-| 02 | [Data Ingestion](./02-data-ingestion.md) | 01 | §2 Financial data; §5 dirty data |
+| 02 | [Data Ingestion & Transaction CRUD](./02-data-ingestion.md) | 01 | §2 Financial data; §5 dirty data; transaction CRUD |
 | 03 | [Budget Tracking](./03-budget-tracking.md) | 01, 02 | §3.6 Track a budget |
 | 04 | [User Memory / Preferences](./04-user-memory.md) | 01 | §3.10 Remember user context |
 | 05 | [Chat History](./05-chat-history.md) | 01 | §2 conversational assistant (persistence) |

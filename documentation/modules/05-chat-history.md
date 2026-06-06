@@ -13,10 +13,20 @@
 ## Data
 
 ```sql
-chat_messages (id, user_id, role, content, created_at)
--- role: 'user' | 'assistant'
--- index (user_id, created_at)  → fast recent-history fetch
+CREATE TYPE message_role AS ENUM ('user', 'assistant', 'system');
+
+chat_messages (
+  id, user_id,
+  role       message_role NOT NULL,
+  content    TEXT         NOT NULL,
+  created_at TIMESTAMPTZ
+)
+-- index (user_id, created_at)  → fast recent-history fetch, newest-first
 ```
+
+- `system` is included in the ENUM even though system messages are not user-facing — they may be
+  persisted for debugging/auditing the running summary. Only `user` and `assistant` rows are
+  returned to the frontend.
 
 *(Optional if multi-conversation is in scope: add a `conversations` table and `conversation_id`.
 For 6 hours, a single rolling thread per user is fine — note the simplification.)*

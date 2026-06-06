@@ -16,9 +16,17 @@ This is a small, high-signal module: simple to build, and the assistant gets a c
 ## Data
 
 ```sql
-budgets (id, user_id, category, limit_amount, period, created_at)
--- period: enum 'monthly' (start with this) — extensible to weekly/custom later
--- unique(user_id, category, period)  → one budget per category per period
+CREATE TYPE budget_period AS ENUM ('monthly', 'yearly');
+
+budgets (
+  id, user_id,
+  category      transaction_category NOT NULL,   -- reuses the ENUM from Module 02
+  limit_amount  NUMERIC(12,2)        NOT NULL,
+  period        budget_period        NOT NULL DEFAULT 'monthly',
+  created_at    TIMESTAMPTZ
+)
+-- unique(user_id, category, period)  → one budget per category per period type
+-- e.g. a user can have BOTH a monthly AND yearly budget for 'travel'
 ```
 
 ---
@@ -36,14 +44,19 @@ The reusable piece (the assistant's `budget_tracker_tool` calls the same service
 
 ```
 status(category, period) →
-  spent   = current-period spend for category  (read from monthly_category_rollups)
+  spent   = period spend for category:
+              monthly → read from monthly_category_rollups for current month
+              yearly  → SUM monthly_category_rollups for current calendar year (12 rows max)
   limit   = budgets.limit_amount
   ratio   = spent / limit
   state   = ok (<80%) | warning (80–100%) | over (>100%)
-  →  { category, spent, limit, remaining, ratio, state }
+  →  { category, period, spent, limit, remaining, ratio, state }
 ```
 
-- Read **spend from `monthly_category_rollups`**, not by scanning raw transactions — stays cheap.
+- **Monthly** spend: single rollup row read — O(1).
+- **Yearly** spend: SUM of up to 12 rollup rows for the current year — still O(1) in practice,
+  never scans raw transactions.
+- Read **spend from `monthly_category_rollups`** in both cases — stays cheap.
 - Respects user preferences from [04 User Memory](./04-user-memory.md) (e.g. "don't count rent in
   food budget") when that module exists: exclusions are applied to the spend figure. Until then,
   compute the raw figure and leave a hook.
@@ -66,8 +79,10 @@ status(category, period) →
 |------|----------|
 | Budget set for a category with no spend yet | `spent = 0`, `state = ok` — valid, not an error |
 | Spend exists but no budget set | status returns "no budget for this category" — don't invent one |
-| Category typo / unknown category | validate against the user's known categories on write |
+| Category not in ENUM | rejected at the schema level — Postgres raises a type error before it hits the service |
 | Mid-period budget change | status always reflects the current `limit_amount`; no historical recompute |
+| User has both monthly AND yearly budget for same category | both are valid — return both statuses; the assistant surfaces whichever is most relevant to the question |
+| Yearly budget queried in January | only 1 month of rollups exist — `spent` is accurate for what has elapsed, not fabricated |
 
 ---
 
@@ -78,7 +93,8 @@ status(category, period) →
 | Budget CRUD | Fully working — simple, high signal |
 | Budget-status service | Fully working — reused by the assistant tool |
 | Monthly period | Fully working |
-| Weekly / custom periods | Skip; design the `period` column to allow it, note in README |
+| Yearly period | Fully working — SUM of rollup rows, stays cheap |
+| Weekly / custom periods | Skip; ENUM is designed to extend, note in README |
 | Preference-aware exclusions | Hook now, wire when Module 04 exists |
 
 ---
@@ -86,6 +102,9 @@ status(category, period) →
 ## Done when
 
 - [ ] A user can create, read, update, delete a budget for a category.
-- [ ] Budget status returns spent / limit / remaining / state, reading from rollups.
+- [ ] Both `monthly` and `yearly` periods work; yearly correctly sums rollup rows for the year.
+- [ ] A user can hold both a monthly and yearly budget for the same category simultaneously.
+- [ ] Budget status returns spent / limit / remaining / state, reading from rollups only.
 - [ ] The 80% warning and over-limit states are correct against the sample data.
+- [ ] Invalid category values are rejected at the DB level (ENUM constraint).
 - [ ] All budget rows are `user_id`-scoped.

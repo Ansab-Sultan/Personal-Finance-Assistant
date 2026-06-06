@@ -244,7 +244,7 @@ backend/
 ├── api/
 │   └── v1/
 │       ├── auth.py           # Clerk webhook: user.created, user.deleted
-│       ├── transactions.py   # POST /upload-csv, GET /transactions
+│       ├── transactions.py   # POST /upload-csv + full CRUD (GET/POST/PATCH/DELETE /transactions)
 │       ├── chat.py           # POST /chat (SSE streaming response)
 │       ├── budget.py         # CRUD for budgets
 │       └── users.py          # GET/PATCH user profile + preferences
@@ -330,27 +330,46 @@ Worker entry point: `worker.py` — registered with Redis via ARQ.
 ## Database Schema (High Level)
 
 ```sql
-users                    (id, clerk_id, email, created_at)
-transactions             (id, user_id, date, amount, currency, merchant, raw_description,
-                          category, source, hash, created_at)
-budgets                  (id, user_id, category, limit_amount, period, created_at)
-chat_messages            (id, user_id, role, content, created_at)
-user_preferences         (id, user_id, key, value, updated_at)
-monthly_category_rollups (id, user_id, month, category, total_amount, txn_count, updated_at)
+-- ENUMs
+CREATE TYPE transaction_source   AS ENUM ('csv', 'bank_api', 'manual', 'receipt');
+CREATE TYPE transaction_category AS ENUM (
+  'groceries', 'restaurants', 'transport', 'fuel',
+  'utilities', 'rent', 'health', 'entertainment',
+  'shopping', 'subscriptions', 'travel', 'education',
+  'income', 'transfer', 'uncategorized'
+);
+CREATE TYPE budget_period AS ENUM ('monthly', 'yearly');
+CREATE TYPE message_role  AS ENUM ('user', 'assistant', 'system');
+
+-- Tables
+users                    (id, clerk_id UNIQUE, email, created_at)
+transactions             (id, user_id, date, amount, currency VARCHAR(3), merchant,
+                          raw_description, category transaction_category, source transaction_source,
+                          hash, created_at)
+budgets                  (id, user_id, category transaction_category, limit_amount,
+                          period budget_period DEFAULT 'monthly', created_at)
+chat_messages            (id, user_id, role message_role, content, created_at)
+user_preferences         (id, user_id, key TEXT CHECK (key IN ('pay_date','exclude_from_food',
+                          'currency_display','pay_cycle_start')), value, updated_at)
+monthly_category_rollups (id, user_id, month, category transaction_category,
+                          total_amount, txn_count, updated_at)
 
 -- indexes
 transactions:  (user_id, date), (user_id, category, date), unique(user_id, hash)
 rollups:       unique(user_id, month, category)
+budgets:       unique(user_id, category, period)
+chat_messages: (user_id, created_at)
 ```
 
-- `transactions.hash` — SHA256 of (user_id + date + amount + merchant); a **unique constraint** so
-  re-ingesting the same CSV is idempotent (exact-duplicate dedup)
-- `transactions.source` — `"csv"` or `"bank_api"`, for auditability and cross-source reconciliation
-- `transactions.raw_description` — the original, **untrusted** merchant/description string, kept
-  separate from the cleaned `merchant` field (see Safety & Data Trust — never treated as instructions)
-- `transactions.currency` — stored, not converted (multi-currency conversion is out of scope)
-- `monthly_category_rollups` — pre-aggregated totals; the read path for any multi-month question
-- `user_preferences` — flat key-value store (e.g. `pay_date: "1"`, `exclude_from_food: "rent"`)
+- `transactions.hash` — SHA256 of (user_id + date + amount + merchant); unique constraint makes re-ingestion idempotent
+- `transactions.source` — ENUM; system-set, never client-supplied
+- `transactions.category` — ENUM of 15 canonical values; unknown input maps to `uncategorized`
+- `transactions.currency` — VARCHAR(3) + CHECK (`^[A-Z]{3}$`); not an ENUM because ISO 4217 has ~170 currencies
+- `transactions.raw_description` — untrusted original string, kept separate from cleaned `merchant` (never treated as instructions)
+- `budgets.period` — ENUM `monthly | yearly`; a user can hold both for the same category simultaneously
+- `chat_messages.role` — ENUM; `system` rows stored for debugging but not returned to the frontend
+- `user_preferences.key` — CHECK constraint against a known vocabulary (same enforcement as ENUM, easier to extend)
+- `monthly_category_rollups` — pre-aggregated totals; the read path for all multi-month questions
 
 ---
 
@@ -362,6 +381,7 @@ Be honest about this in the README. The evaluators read Section 7 carefully.
 |---------|------|--------|
 | Clerk auth | Fully working | Commodity — one day of setup max |
 | CSV ingestion | Fully working | Core data path — must work |
+| Transaction CRUD | Fully working | User owns their data; rollup-synced on every change |
 | Spending queries | Fully working | Core assistant capability, high signal |
 | Budget tracking | Fully working | Simple, high signal for evaluators |
 | Finance summary | Fully working | Core assistant capability |

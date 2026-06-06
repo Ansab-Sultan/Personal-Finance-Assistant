@@ -1,6 +1,7 @@
 import uuid
 from sqlalchemy import Column, DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from app.models.base import Base
 
 class User(Base):
@@ -11,3 +12,7 @@ class User(Base):
     clerk_id = Column(String, unique=True, nullable=False, index=True)
     email = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
+    monthly_category_rollups = relationship("MonthlyCategoryRollup", back_populates="user", cascade="all, delete-orphan")
+    budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")

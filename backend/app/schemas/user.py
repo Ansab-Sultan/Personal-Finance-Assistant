@@ -1,10 +1,10 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict
 
 class UserBase(BaseModel):
     """Base Pydantic schema for User properties."""
-    email: EmailStr
+    email: str
 
 class UserCreate(UserBase):
     """Pydantic schema for creating a user (e.g. from webhooks)."""
