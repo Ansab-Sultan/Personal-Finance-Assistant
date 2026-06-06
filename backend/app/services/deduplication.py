@@ -4,13 +4,18 @@ from typing import Any, Dict, List, Set, Tuple
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
+from app.core.logger import get_logger
 from app.models.transaction import Transaction
+
+logger = get_logger(__name__)
+
 
 def compute_transaction_hash(user_id: UUID, date_val: date, amount: float, merchant: str) -> str:
     """Compute the SHA256 hash of a transaction to uniquely identify it for idempotency."""
     formatted_amount = f"{float(amount):.2f}"
     raw_str = f"{str(user_id)}|{date_val.isoformat()}|{formatted_amount}|{merchant.strip().lower()}"
     return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
+
 
 async def find_existing_hashes(session: AsyncSession, user_id: UUID, hashes: Set[str]) -> Set[str]:
     """Find which of the given hashes already exist in the database for the user."""
@@ -62,4 +67,13 @@ async def find_near_duplicates(
         )
     )
     result = await session.execute(query)
-    return list(result.scalars().all())
+    near_dupes = list(result.scalars().all())
+    if near_dupes:
+        logger.warning(
+            "find_near_duplicates — user_id=%s found=%d near-duplicate(s)",
+            user_id, len(near_dupes)
+        )
+    else:
+        logger.debug("find_near_duplicates — user_id=%s no near-duplicates found", user_id)
+    return near_dupes
+

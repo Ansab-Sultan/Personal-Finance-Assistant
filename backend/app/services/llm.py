@@ -4,6 +4,10 @@ from google import genai
 from google.genai import types
 
 from app.core.config import settings
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class GeminiClient:
     """LLM service client managing interactions with Google GenAI SDK and mock fallbacks."""
@@ -17,6 +21,9 @@ class GeminiClient:
         )
         if not self.is_mock:
             self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            logger.info("GeminiClient initialized in LIVE mode")
+        else:
+            logger.info("GeminiClient initialized in MOCK mode (no live API calls)")
 
     async def generate_chat_response_stream(
         self,
@@ -25,6 +32,7 @@ class GeminiClient:
     ) -> AsyncGenerator[str, None]:
         """Generate a streaming response for the chat thread."""
         if self.is_mock:
+            logger.debug("generate_chat_response_stream — returning mock reply")
             reply = (
                 "Hello! This is a mock response from the Personal Finance Assistant. "
                 "I am running in mock mode because a dummy Gemini API key is configured. "
@@ -35,6 +43,7 @@ class GeminiClient:
                 await asyncio.sleep(0.04)
             return
 
+        logger.debug("generate_chat_response_stream — calling Gemini API messages=%d", len(messages))
         contents = []
         for msg in messages:
             role = "model" if msg["role"] == "assistant" else "user"
@@ -64,11 +73,13 @@ class GeminiClient:
                 if chunk.text:
                     yield chunk.text
         except Exception as exc:
+            logger.error("Gemini streaming API error: %s", exc)
             yield f"\n[Error calling Gemini API: {str(exc)}. Falling back to mock responses.]"
 
     async def summarize(self, existing_summary: str, old_turns: List[Dict[str, str]]) -> str:
         """Produce a consolidated running summary of conversation history."""
         if self.is_mock:
+            logger.debug("summarize — mock mode, skipping LLM call for %d turns", len(old_turns))
             return (
                 f"Mock consolidated summary. Folded in {len(old_turns)} older conversation turns. "
                 f"Previous summary was: '{existing_summary}'."
@@ -85,6 +96,7 @@ class GeminiClient:
 
         loop = asyncio.get_event_loop()
         try:
+            logger.debug("summarize — calling Gemini API for %d turns", len(old_turns))
             response = await loop.run_in_executor(
                 None,
                 lambda: self.client.models.generate_content(
@@ -94,6 +106,8 @@ class GeminiClient:
             )
             return response.text.strip()
         except Exception as exc:
+            logger.error("Gemini summarize API error: %s", exc)
             return f"Summary refresh failed due to API error: {str(exc)}"
+
 
 llm_client = GeminiClient()

@@ -7,11 +7,14 @@ from pydantic import BaseModel, Field
 from app.core.database import AsyncSessionLocal
 from app.core.config import settings
 from app.core.llm_config import llm_config
+from app.core.logger import get_logger
 from app.agent.state import AgentState
 from app.agent import tools
 
 from google import genai
 from google.genai import types
+
+logger = get_logger(__name__)
 
 class RouterOutput(BaseModel):
     """Pydantic model representing structured classification output from the router.
@@ -37,8 +40,12 @@ class AgentStepOutput(BaseModel):
 async def router_node(state: AgentState) -> Dict[str, Any]:
     """Classify the user intent and extract query parameters, routing to either fast_lane or react."""
     msg = state.get("message", "").strip()
-    
+    user_id = state.get("user_id", "?")
+
+    logger.info("router_node invoked — user_id=%s message_len=%d", user_id, len(msg))
+
     if state.get("image_base64"):
+        logger.debug("router_node — image detected, routing to fast_lane:receipt_ocr")
         return {
             "route": "fast_lane",
             "intent": "receipt_ocr",
@@ -139,6 +146,10 @@ async def router_node(state: AgentState) -> Dict[str, Any]:
             parsed_params = {}
     else:
         parsed_params = raw_params
+    logger.info(
+        "router_node classified — user_id=%s route=%s intent=%s",
+        user_id, result["route"], result["intent"]
+    )
     return {
         "route": result["route"],
         "intent": result["intent"],
@@ -150,7 +161,9 @@ async def fast_lane_node(state: AgentState) -> Dict[str, Any]:
     intent = state.get("intent")
     params = state.get("tool_parameters", {})
     user_id = UUID(state["user_id"])
-    
+
+    logger.info("fast_lane_node invoked — user_id=%s intent=%s", user_id, intent)
+
     async with AsyncSessionLocal() as session:
         if intent == "spending_query":
             cats = params.get("categories") or params.get("category")
@@ -262,7 +275,8 @@ async def fast_lane_node(state: AgentState) -> Dict[str, Any]:
 async def react_agent_node(state: AgentState) -> Dict[str, Any]:
     """Execute a structured ReAct loop using the LLM, invoking tools iteratively to form a final narrated response."""
     user_id = UUID(state["user_id"])
-    
+    logger.info("react_agent_node invoked — user_id=%s intent=%s", user_id, state.get("intent"))
+
     if llm_config.model == "mock" or (settings.GEMINI_API_KEY and settings.GEMINI_API_KEY.startswith("dummy")):
         intent = state.get("intent")
         if intent == "cutback_suggestion":
@@ -326,7 +340,11 @@ async def react_agent_node(state: AgentState) -> Dict[str, Any]:
             
             res = json.loads(response.text.strip())
             action = res.get("action", "none").strip()
-            
+            logger.debug(
+                "react_agent_node step %d — user_id=%s action=%s",
+                step, user_id, action
+            )
+
             if action == "none" or not action:
                 return {"response": res.get("final_answer", "")}
 
@@ -374,11 +392,17 @@ async def react_agent_node(state: AgentState) -> Dict[str, Any]:
                     val = {"error": f"Tool '{action}' not found"}
             except Exception as e:
                 val = {"error": f"Tool execution failed: {str(e)}"}
-                
+                logger.error("react_agent_node tool error — user_id=%s action=%s error=%s", user_id, action, e)
+
             tool_results[action] = val
-            
+            logger.debug("react_agent_node tool result — action=%s result_keys=%s", action, list(val.keys()) if isinstance(val, dict) else "?")
+
+        logger.warning("react_agent_node timed out — user_id=%s", user_id)
         return {"response": "ReAct agent timed out. Please try a simpler question."}
 
 async def synthesizer_node(state: AgentState) -> Dict[str, Any]:
     """Pass-through node representing response synthesis."""
-    return {"response": state.get("response", "")}
+    user_id = state.get("user_id", "?")
+    resp = state.get("response", "")
+    logger.debug("synthesizer_node — user_id=%s response_len=%d", user_id, len(resp))
+    return {"response": resp}

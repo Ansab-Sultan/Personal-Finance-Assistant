@@ -10,7 +10,11 @@ from arq.connections import RedisSettings
 from app.core.security import verify_clerk_token
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.logger import get_logger
 from app.models.user import User
+
+logger = get_logger(__name__)
+
 
 async def get_current_user(request: Request) -> str:
     """Validate Clerk token and extract the user's Clerk ID."""
@@ -22,22 +26,27 @@ async def get_current_user(request: Request) -> str:
     try:
         state = verify_clerk_token(httpx_req)
     except Exception as exc:
+        logger.warning("Token verification raised exception: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Token verification failed: {str(exc)}",
         )
     if state.status != AuthStatus.SIGNED_IN or not state.payload:
+        logger.warning("Unauthenticated request — Clerk status: %s", state.status)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
     clerk_id = state.payload.get("sub")
     if not clerk_id:
+        logger.warning("Authenticated token missing 'sub' claim")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token missing user identity",
         )
+    logger.debug("Clerk token verified — clerk_id=%s", clerk_id)
     return clerk_id
+
 
 async def get_db_user_id(
     clerk_id: str = Depends(get_current_user),
@@ -58,15 +67,22 @@ async def get_db_user_id(
                 await db.flush()
             await db.commit()
             user_id = new_user.id
+            logger.info("Auto-created DB user for clerk_id=%s — db_user_id=%s", clerk_id, user_id)
         except IntegrityError:
             result = await db.execute(query)
             user_id = result.scalar_one()
+            logger.debug("IntegrityError on auto-create — resolved existing db_user_id=%s", user_id)
+    else:
+        logger.debug("Resolved db_user_id=%s for clerk_id=%s", user_id, clerk_id)
     return user_id
+
 
 async def get_redis_pool():
     """Create and yield a Redis pool for arq job enqueuing."""
+    logger.debug("Creating Redis pool from DSN")
     pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
     try:
         yield pool
     finally:
         await pool.close()
+        logger.debug("Redis pool closed")

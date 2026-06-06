@@ -5,22 +5,26 @@ from datetime import date
 from typing import Any, Dict, List, Tuple, Set
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.logger import get_logger
 from app.models.transaction import Transaction
 from app.services.normalizer import normalize_transaction_data, parse_date, parse_amount
 from app.services.deduplication import compute_transaction_hash, find_existing_hashes, find_near_duplicates
 from app.services.transactions import create_transaction, refresh_monthly_rollups, get_month_str
 
+logger = get_logger(__name__)
+
+
 async def parse_csv_stream(csv_content: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Parse CSV text content, returning normalized rows and quarantined rows."""
     normalized_rows = []
     quarantined_rows = []
-    
+
     f = io.StringIO(csv_content)
     reader = csv.DictReader(f)
-    
+
     if not reader.fieldnames:
         raise ValueError("CSV file has no headers")
-        
+
     field_map = {}
     for col in reader.fieldnames:
         col_lower = col.strip().lower()
@@ -37,6 +41,8 @@ async def parse_csv_stream(csv_content: str) -> Tuple[List[Dict[str, Any]], List
         elif "currency" in col_lower:
             field_map["currency"] = col
 
+    logger.debug("CSV field map resolved: %s", field_map)
+
     for row_idx, row in enumerate(reader, start=1):
         try:
             raw_date = row.get(field_map.get("date", "date"))
@@ -45,10 +51,10 @@ async def parse_csv_stream(csv_content: str) -> Tuple[List[Dict[str, Any]], List
             raw_desc = row.get(field_map.get("description", "description"))
             raw_category = row.get(field_map.get("category", "category"))
             raw_currency = row.get(field_map.get("currency", "currency"))
-            
+
             if not raw_date or not raw_amount:
                 raise ValueError("Missing required fields: date or amount")
-                
+
             raw_record = {
                 "date": raw_date,
                 "amount": raw_amount,
@@ -57,21 +63,28 @@ async def parse_csv_stream(csv_content: str) -> Tuple[List[Dict[str, Any]], List
                 "category": raw_category or "",
                 "currency": raw_currency or "USD"
             }
-            
+
             normalized = normalize_transaction_data(raw_record, source="csv")
             normalized_rows.append(normalized)
-            
+
         except Exception as exc:
+            logger.warning("CSV row %d quarantined: %s", row_idx, exc)
             quarantined_rows.append({
                 "row_number": row_idx,
                 "raw_data": row,
                 "reason": str(exc)
             })
-            
+
+    logger.info(
+        "CSV parse complete — normalized=%d quarantined=%d",
+        len(normalized_rows), len(quarantined_rows)
+    )
     return normalized_rows, quarantined_rows
+
 
 async def fetch_mock_bank_data() -> List[Dict[str, Any]]:
     """Fetch transactions from a simulated mock bank endpoint."""
+    logger.debug("Fetching mock bank data")
     return [
         {
             "date": "2026-06-01",
@@ -107,6 +120,7 @@ async def fetch_mock_bank_data() -> List[Dict[str, Any]]:
         }
     ]
 
+
 async def ingest_transactions(
     session: AsyncSession,
     user_id: UUID,
@@ -114,16 +128,19 @@ async def ingest_transactions(
 ) -> Dict[str, Any]:
     """Ingest, deduplicate, and record normalized transactions for the user."""
     if not normalized_txns:
+        logger.debug("ingest_transactions — empty input, nothing to insert")
         return {
             "inserted": 0,
             "duplicates_skipped": 0,
             "suspected_duplicates": []
         }
-        
+
+    logger.info("Ingesting %d normalized transactions — user_id=%s", len(normalized_txns), user_id)
+
     hashes_to_check = set()
     unique_txns = []
     seen_hashes_in_batch = set()
-    
+
     for txn in normalized_txns:
         h = compute_transaction_hash(
             user_id=user_id,
@@ -132,24 +149,29 @@ async def ingest_transactions(
             merchant=txn["merchant"]
         )
         txn["hash"] = h
-        
+
         if h in seen_hashes_in_batch:
             continue
         seen_hashes_in_batch.add(h)
         hashes_to_check.add(h)
         unique_txns.append(txn)
-        
+
     existing_hashes = await find_existing_hashes(session, user_id, hashes_to_check)
-    
+
     to_insert = []
     duplicates_skipped = 0
-    
+
     for txn in unique_txns:
         if txn["hash"] in existing_hashes:
             duplicates_skipped += 1
         else:
             to_insert.append(txn)
-            
+
+    logger.debug(
+        "Deduplication complete — to_insert=%d duplicates_skipped=%d near_dupe_check=%d",
+        len(to_insert), duplicates_skipped, len(to_insert)
+    )
+
     near_dupes = await find_near_duplicates(session, user_id, to_insert)
     near_dupe_details = [
         {
@@ -161,7 +183,12 @@ async def ingest_transactions(
         }
         for d in near_dupes
     ]
-    
+
+    if near_dupe_details:
+        logger.warning(
+            "Near-duplicates detected — user_id=%s count=%d",
+            user_id, len(near_dupe_details)
+        )
 
     db_txns = []
     affected_buckets = set()
@@ -180,19 +207,23 @@ async def ingest_transactions(
         )
         db_txns.append(db_txn)
         affected_buckets.add((get_month_str(txn["date"]), txn["category"]))
-        
+
     session.add_all(db_txns)
     await session.flush()
-    
+
     if affected_buckets:
         await refresh_monthly_rollups(session, user_id, list(affected_buckets))
         from app.services.subscriptions import detect_and_save_subscriptions
         from app.services.anomalies import detect_and_save_anomalies
         await detect_and_save_subscriptions(session, user_id)
         await detect_and_save_anomalies(session, user_id)
-        
+
     inserted_count = len(db_txns)
-        
+    logger.info(
+        "Ingestion complete — user_id=%s inserted=%d duplicates_skipped=%d suspected_dupes=%d",
+        user_id, inserted_count, duplicates_skipped, len(near_dupe_details)
+    )
+
     return {
         "inserted": inserted_count,
         "duplicates_skipped": duplicates_skipped,

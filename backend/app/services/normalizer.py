@@ -1,6 +1,10 @@
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 import re
+from app.core.logger import get_logger
+from app.models.transaction import TransactionCategory
+
+logger = get_logger(__name__)
 
 CANONICAL_CATEGORIES = {
     "groceries",

@@ -6,8 +6,12 @@ from sqlalchemy import and_, desc, select, update, delete, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import DuplicateTransactionError
+from app.core.logger import get_logger
 from app.models.transaction import Transaction, MonthlyCategoryRollup
 from app.services.deduplication import compute_transaction_hash
+
+logger = get_logger(__name__)
+
 
 def get_month_str(date_val: date) -> str:
     """Get the YYYY-MM string representation of a date."""
@@ -68,9 +72,9 @@ async def create_transaction(
     amount = txn_data["amount"]
     merchant = txn_data["merchant"]
     category = txn_data.get("category", "uncategorized")
-    
+
     txn_hash = compute_transaction_hash(user_id, date_val, amount, merchant)
-    
+
     new_txn = Transaction(
         user_id=user_id,
         date=date_val,
@@ -83,12 +87,14 @@ async def create_transaction(
         hash=txn_hash
     )
     session.add(new_txn)
-    
+    logger.debug(
+        "Transaction created — user_id=%s merchant=%s amount=%s category=%s",
+        user_id, merchant, amount, category
+    )
+
     month = get_month_str(date_val)
     await adjust_rollup(session, user_id, month, category, float(amount), 1)
 
-    # Subscription/anomaly detection is recomputed off the request path via an enqueued
-    # ARQ job (see recompute_detections_task) — a single write shouldn't block on a full rescan.
     return new_txn
 
 async def update_transaction(
@@ -144,20 +150,21 @@ async def delete_transaction(
     )
     result = await session.execute(query)
     txn = result.scalar_one_or_none()
-    
+
     if not txn:
+        logger.warning("Delete transaction — not found: txn_id=%s user_id=%s", txn_id, user_id)
         return False
-        
+
     old_date = txn.date
     old_amount = float(txn.amount)
     old_category = txn.category
-    
+
     await session.delete(txn)
-    
+    logger.info("Transaction deleted — txn_id=%s user_id=%s", txn_id, user_id)
+
     month = get_month_str(old_date)
     await adjust_rollup(session, user_id, month, old_category, -old_amount, -1)
 
-    # Detection recompute is enqueued by the API layer after commit (see recompute_detections_task).
     return True
 
 async def refresh_monthly_rollups(

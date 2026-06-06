@@ -6,7 +6,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.budget import Budget, BudgetPeriod
 from app.models.transaction import TransactionCategory, MonthlyCategoryRollup
+from app.core.logger import get_logger
 from app.services.memory import get_preference_by_key
+
+logger = get_logger(__name__)
 
 async def compute_budget_status(
     session: AsyncSession,
@@ -20,8 +23,12 @@ async def compute_budget_status(
     Exclusions from Module 04 user preferences can be applied to the spent query here
     when that module is implemented.
     """
+    logger.debug(
+        "Computing budget status — user_id=%s category=%s period=%s limit=%.2f",
+        user_id, category, period, limit_amount
+    )
     spent_sum = 0.0
-    
+
     if period == BudgetPeriod.monthly:
         current_month = date.today().strftime("%Y-%m")
         query = select(MonthlyCategoryRollup.total_amount).where(
@@ -106,6 +113,10 @@ async def create_or_update_budget(
     period: BudgetPeriod
 ) -> Budget:
     """Create a new budget or update an existing one for the same user, category and period."""
+    logger.info(
+        "Upserting budget — user_id=%s category=%s period=%s limit=%.2f",
+        user_id, category, period, limit_amount
+    )
     query = select(Budget).where(
         Budget.user_id == user_id,
         Budget.category == category,
@@ -116,6 +127,7 @@ async def create_or_update_budget(
     
     if budget:
         budget.limit_amount = limit_amount
+        logger.debug("Budget updated in-place — budget_id=%s", budget.id)
     else:
         try:
             async with session.begin_nested():
@@ -127,12 +139,14 @@ async def create_or_update_budget(
                 )
                 session.add(budget)
                 await session.flush()
+            logger.debug("Budget created — budget_id=%s", budget.id)
         except IntegrityError:
             result = await session.execute(query)
             budget = result.scalar_one()
             budget.limit_amount = limit_amount
             await session.flush()
-            
+            logger.debug("Budget IntegrityError resolved — budget_id=%s", budget.id)
+
     return budget
 
 async def get_budget(session: AsyncSession, user_id: UUID, budget_id: UUID) -> Optional[Budget]:
@@ -158,10 +172,12 @@ async def delete_budget(session: AsyncSession, user_id: UUID, budget_id: UUID) -
     )
     result = await session.execute(query)
     budget = result.scalar_one_or_none()
-    
+
     if budget:
         await session.delete(budget)
+        logger.info("Budget deleted — budget_id=%s user_id=%s", budget_id, user_id)
         return True
+    logger.warning("Budget not found for deletion — budget_id=%s user_id=%s", budget_id, user_id)
     return False
 
 async def get_all_budget_statuses(session: AsyncSession, user_id: UUID) -> List[Dict[str, Any]]:

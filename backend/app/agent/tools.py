@@ -4,11 +4,14 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
+from app.core.logger import get_logger
 from app.models.transaction import Transaction, MonthlyCategoryRollup, DetectedSubscription, FlaggedAnomaly, TransactionCategory
 from app.models.budget import Budget, BudgetPeriod
 from app.services import budget as budget_service
 from app.services import memory as memory_service
 from app.services.receipt import parse_receipt_image
+
+logger = get_logger(__name__)
 
 async def spending_query_tool(
     db: AsyncSession,
@@ -17,6 +20,7 @@ async def spending_query_tool(
     period: str = "monthly"
 ) -> Dict[str, Any]:
     """Calculate the total spending in specific categories for a given period."""
+    logger.debug("spending_query_tool — user_id=%s categories=%s period=%s", user_id, categories, period)
     cleaned_categories = [c.strip().lower() for c in categories]
     
     total = 0.0
@@ -67,6 +71,7 @@ async def transactions_list_tool(
     limit: int = 5
 ) -> Dict[str, Any]:
     """Fetch the most recent transactions for a user, up to the given limit."""
+    logger.debug("transactions_list_tool — user_id=%s limit=%d", user_id, limit)
     query = select(Transaction).where(
         Transaction.user_id == user_id
     ).order_by(Transaction.date.desc()).limit(limit)
@@ -93,6 +98,7 @@ async def budget_tracker_tool(
     period: str = "monthly"
 ) -> Dict[str, Any]:
     """Compare current spending against the user's budget limits for a category."""
+    logger.debug("budget_tracker_tool — user_id=%s category=%s period=%s", user_id, category, period)
     cat_enum = TransactionCategory(category.strip().lower())
     period_enum = BudgetPeriod(period.strip().lower())
     
@@ -108,6 +114,7 @@ async def user_memory_tool(
     value: Optional[str] = None
 ) -> Dict[str, Any]:
     """Read, create, or update user financial preferences/memory keys in the database."""
+    logger.debug("user_memory_tool — user_id=%s action=%s key=%s", user_id, action, key)
     action_clean = action.strip().lower()
     
     if action_clean == "read":
@@ -140,6 +147,7 @@ async def finance_summary_tool(
     period: str = "monthly"
 ) -> Dict[str, Any]:
     """Generate a category-wise summary of all spending and incomes for the current period."""
+    logger.debug("finance_summary_tool — user_id=%s period=%s", user_id, period)
     total_spending = 0.0
     total_income = 0.0
     breakdown = {}
@@ -197,6 +205,7 @@ async def temporal_comparison_tool(
     period_b: str
 ) -> Dict[str, Any]:
     """Compare spending in a category between two months."""
+    logger.debug("temporal_comparison_tool — user_id=%s category=%s %s vs %s", user_id, category, period_a, period_b)
     cat_enum = TransactionCategory(category.strip().lower())
     
     query_a = select(MonthlyCategoryRollup.total_amount).where(
@@ -232,6 +241,7 @@ async def temporal_comparison_tool(
 
 async def subscription_detector_tool(db: AsyncSession, user_id: UUID) -> Dict[str, Any]:
     """Read precomputed detected recurring subscription charges from the database."""
+    logger.debug("subscription_detector_tool — user_id=%s", user_id)
     query = select(DetectedSubscription).where(DetectedSubscription.user_id == user_id)
     res = await db.execute(query)
     subs = res.scalars().all()
@@ -251,6 +261,7 @@ async def subscription_detector_tool(db: AsyncSession, user_id: UUID) -> Dict[st
 
 async def anomaly_detector_tool(db: AsyncSession, user_id: UUID) -> Dict[str, Any]:
     """Read precomputed flagged transaction anomalies from the database."""
+    logger.debug("anomaly_detector_tool — user_id=%s", user_id)
     query = select(FlaggedAnomaly).where(FlaggedAnomaly.user_id == user_id)
     res = await db.execute(query)
     anoms = res.scalars().all()
@@ -275,14 +286,17 @@ async def receipt_ocr_tool(
     image_name: str
 ) -> Dict[str, Any]:
     """OCR parse an uploaded receipt image using Gemini Vision."""
+    logger.debug("receipt_ocr_tool — user_id=%s image_name=%s", user_id, image_name)
     try:
         parsed = await parse_receipt_image(image_base64)
+        logger.info("receipt_ocr_tool success — user_id=%s", user_id)
         return {
             "success": True,
             "image_name": image_name,
             "parsed_data": parsed
         }
     except Exception as exc:
+        logger.error("receipt_ocr_tool failed — user_id=%s error=%s", user_id, exc)
         return {
             "success": False,
             "error": str(exc)
@@ -290,6 +304,7 @@ async def receipt_ocr_tool(
 
 async def cutback_suggestion_tool(db: AsyncSession, user_id: UUID) -> Dict[str, Any]:
     """Analyze current spending categories to offer cutback suggestions."""
+    logger.debug("cutback_suggestion_tool — user_id=%s", user_id)
     summary = await finance_summary_tool(db, user_id, "monthly")
     category_spends = summary["category_spends"]
     
@@ -313,6 +328,7 @@ async def cutback_suggestion_tool(db: AsyncSession, user_id: UUID) -> Dict[str, 
 
 async def merchant_lookup_tool(merchant: str) -> Dict[str, Any]:
     """Stub/mock lookup helper for unrecognized merchants."""
+    logger.debug("merchant_lookup_tool — merchant=%s", merchant)
     merchant_clean = merchant.strip().lower()
     
     if "starbucks" in merchant_clean:

@@ -3,8 +3,11 @@ from uuid import UUID
 from sqlalchemy import select, func, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.chat import ChatMessage, MessageRole
+from app.core.logger import get_logger
 from app.services.llm import GeminiClient, llm_client
 from app.services.memory import get_preferences
+
+logger = get_logger(__name__)
 
 RECENT_TURNS = 20
 SUMMARIZE_THRESHOLD = 40
@@ -25,6 +28,7 @@ async def save_message(
     )
     session.add(msg)
     await session.flush()
+    logger.debug("Message saved — user_id=%s role=%s content_len=%d", user_id, role, len(content))
     return msg
 
 async def count_unsummarized(session: AsyncSession, user_id: UUID) -> int:
@@ -102,8 +106,12 @@ async def maybe_refresh_summary(
     unsummarized_count = await count_unsummarized(session, user_id)
     summary_row = await get_summary_row(session, user_id)
     existing_summary = summary_row.content if summary_row else ""
-    
+
     if unsummarized_count <= SUMMARIZE_THRESHOLD:
+        logger.debug(
+            "Summary not refreshed — user_id=%s unsummarized_count=%d (threshold=%d)",
+            user_id, unsummarized_count, SUMMARIZE_THRESHOLD
+        )
         return existing_summary if existing_summary else None
         
     query = select(ChatMessage).where(
@@ -119,7 +127,11 @@ async def maybe_refresh_summary(
         return existing_summary if existing_summary else None
         
     turns_to_summarize = all_unsummarized[:-RECENT_TURNS]
-    
+
+    logger.info(
+        "Refreshing conversation summary — user_id=%s turns_to_summarize=%d",
+        user_id, len(turns_to_summarize)
+    )
     new_summary = await llm.summarize(
         existing_summary=existing_summary,
         old_turns=[
@@ -127,10 +139,11 @@ async def maybe_refresh_summary(
             for t in turns_to_summarize
         ]
     )
-    
+
     await upsert_summary(session, user_id, new_summary)
     await mark_messages_as_summarized(session, [t.id for t in turns_to_summarize])
-    
+    logger.debug("Summary committed — user_id=%s", user_id)
+
     return new_summary
 
 async def get_chat_context(
