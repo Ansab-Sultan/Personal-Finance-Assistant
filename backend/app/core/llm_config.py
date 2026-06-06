@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 class LLMConfig(BaseSettings):
     """Configuration class for LLM parameters overridable via environment variables."""
-    model: str = "gemini-2.5-flash"
+    model: str = "gemini-2.5-flash-lite"
     router_max_tokens: int = 256
     react_max_tokens: int = 8192
     synthesizer_max_tokens: int = 8192

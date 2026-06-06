@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Dict, Any
 from uuid import UUID
@@ -111,7 +112,7 @@ async def router_node(state: AgentState) -> Dict[str, Any]:
         }
 
         
-    import asyncio
+
     loop = asyncio.get_event_loop()
     
     response = await loop.run_in_executor(
@@ -291,7 +292,6 @@ async def react_agent_node(state: AgentState) -> Dict[str, Any]:
             )
             
             loop = asyncio.get_event_loop()
-            import asyncio
             response = await loop.run_in_executor(
                 None,
                 lambda: client.models.generate_content(
