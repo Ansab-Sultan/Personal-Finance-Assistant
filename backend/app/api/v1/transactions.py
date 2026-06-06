@@ -4,6 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from arq.connections import ArqRedis
+from arq.jobs import Job
+
 
 from app.core.database import get_db
 from app.core.dependencies import get_db_user_id, get_redis_pool
@@ -251,3 +253,20 @@ async def delete_transaction_route(
     await db.commit()
     await redis.enqueue_job("recompute_detections_task", str(user_id))
     return None
+
+
+@router.get("/jobs/{job_id}")
+async def get_job_status(
+    job_id: str,
+    redis: ArqRedis = Depends(get_redis_pool),
+    user_id: UUID = Depends(get_db_user_id)
+):
+    """Retrieve the status and result of a background job."""
+    logger.debug("Checking job status — user_id=%s job_id=%s", user_id, job_id)
+    job = Job(job_id, redis)
+    status_val = await job.status()
+    if status_val == "complete":
+        result = await job.result()
+        return {"status": "complete", "result": result}
+    return {"status": status_val}
+

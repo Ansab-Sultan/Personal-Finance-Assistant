@@ -22,16 +22,48 @@ export default function TransactionsPage() {
     setBankLoading(true);
     try {
       const token = await getToken();
-      await fetchWithAuth("/api/v1/transactions/fetch-bank?async=false", {
+      const res = await fetchWithAuth("/api/v1/transactions/fetch-bank?async=true", {
         method: "POST",
         token
       });
-      handleRefresh();
+      
+      const jobId = res.job_id;
+      if (!jobId) {
+        throw new Error("No job ID returned from server");
+      }
+      
+      let attempts = 0;
+      const maxAttempts = 30;
+      
+      const poll = async () => {
+        if (attempts >= maxAttempts) {
+          setBankLoading(false);
+          return;
+        }
+        attempts++;
+        try {
+          const statusRes = await fetchWithAuth(`/api/v1/transactions/jobs/${jobId}`, {
+            token
+          });
+          if (statusRes.status === "complete") {
+            handleRefresh();
+            setBankLoading(false);
+          } else if (statusRes.status === "not_found") {
+            setBankLoading(false);
+          } else {
+            setTimeout(poll, 1000);
+          }
+        } catch (err) {
+          setBankLoading(false);
+        }
+      };
+      
+      setTimeout(poll, 1000);
     } catch (err) {
-    } finally {
       setBankLoading(false);
     }
   };
+
 
   return (
     <div className="flex flex-col gap-8 text-slate-700">

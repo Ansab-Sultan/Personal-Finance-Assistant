@@ -45,21 +45,59 @@ export default function CsvUploader({ onUploadSuccess }: CsvUploaderProps) {
       const formData = new FormData();
       formData.append("file", file);
       
-      const res = await fetchWithAuth("/api/v1/transactions/upload-csv?async=false", {
+      const res = await fetchWithAuth("/api/v1/transactions/upload-csv?async=true", {
         method: "POST",
         body: formData,
         token
       });
       
-      setSummary(res);
-      onUploadSuccess();
+      const jobId = res.job_id;
+      if (!jobId) {
+        throw new Error("No job ID returned from server");
+      }
+      
+      let attempts = 0;
+      const maxAttempts = 30;
+      
+      const poll = async () => {
+        if (attempts >= maxAttempts) {
+          setError("CSV processing timed out.");
+          setLoading(false);
+          setDragActive(false);
+          return;
+        }
+        attempts++;
+        try {
+          const statusRes = await fetchWithAuth(`/api/v1/transactions/jobs/${jobId}`, {
+            token
+          });
+          if (statusRes.status === "complete") {
+            setSummary(statusRes.result);
+            onUploadSuccess();
+            setLoading(false);
+            setDragActive(false);
+          } else if (statusRes.status === "not_found") {
+            setError("Job failed or was not found.");
+            setLoading(false);
+            setDragActive(false);
+          } else {
+            setTimeout(poll, 1000);
+          }
+        } catch (err: any) {
+          setError(err.message || "Failed to check upload status");
+          setLoading(false);
+          setDragActive(false);
+        }
+      };
+      
+      setTimeout(poll, 1000);
     } catch (err: any) {
       setError(err.message || "Failed to upload file");
-    } finally {
       setLoading(false);
       setDragActive(false);
     }
   };
+
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
