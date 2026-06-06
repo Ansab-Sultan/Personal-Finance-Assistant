@@ -42,6 +42,7 @@ async def upload_csv(
 
     normalized, quarantined = await parse_csv_stream(csv_content)
     result = await ingest_transactions(db, user_id, normalized)
+    await db.commit()
     logger.info(
         "CSV ingestion complete — user_id=%s inserted=%d duplicates=%d quarantined=%d",
         user_id, result["inserted"], result["duplicates_skipped"], len(quarantined)
@@ -72,11 +73,13 @@ async def fetch_bank(
     raw_data = await fetch_mock_bank_data()
     normalized = [normalize_transaction_data(item, source="bank_api") for item in raw_data]
     result = await ingest_transactions(db, user_id, normalized)
+    await db.commit()
     logger.info(
         "Bank fetch ingestion complete — user_id=%s inserted=%d",
         user_id, result.get("inserted", 0)
     )
     return result
+
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)

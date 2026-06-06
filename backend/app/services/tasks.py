@@ -33,6 +33,7 @@ async def process_csv_upload(ctx, user_id_str: str, csv_content: str) -> dict:
 
     async with AsyncSessionLocal() as session:
         result = await ingest_transactions(session, user_id, normalized)
+        await session.commit()
 
     logger.info(
         "process_csv_upload complete — user_id=%s inserted=%d duplicates=%d quarantined=%d",
@@ -59,6 +60,7 @@ async def fetch_mock_bank_data_task(ctx, user_id_str: str) -> dict:
 
     async with AsyncSessionLocal() as session:
         result = await ingest_transactions(session, user_id, normalized)
+        await session.commit()
 
     logger.info(
         "fetch_mock_bank_data_task complete — user_id=%s inserted=%d",

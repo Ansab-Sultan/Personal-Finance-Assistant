@@ -1,0 +1,8 @@
+Date,Amount,Merchant,Description,Category,Currency
+2026-06-01,-1500.00,Apartment Rental,Monthly rent payment,rent,USD
+2026-06-02,-45.50,Whole Foods,Weekly groceries,grocery,USD
+2026-06-03,-12.99,Netflix,Subscription,entertainment,USD
+2026-06-04,3500.00,Acme Corp,Monthly Salary,salary,USD
+2026-06-05,-8.50,Starbucks,Coffee on the way to work,food,USD
+2026-06-06,-55.00,Chevron,Fuel for car,fuel,USD
+2026-06-07,150.00,Ebay Inc,Refund for returned item,income,USD
