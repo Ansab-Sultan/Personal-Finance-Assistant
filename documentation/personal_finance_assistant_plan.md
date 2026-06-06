@@ -2,11 +2,17 @@
 
 ---
 
-## Admin Panel? No.
+## Out of Scope
 
-The brief describes a **user-facing product only**. There is zero mention of admin roles,
-platform management, or content moderation anywhere in the documentation. Building an admin
-panel wastes time on something that will not be evaluated. Ship the user app, nothing else.
+The brief describes a **user-facing product only** — no admin roles, platform management, or
+content moderation are mentioned anywhere. The README will state these as deliberate scoping calls:
+
+- **Admin panel / back-office** — nothing in the brief is evaluated through it.
+- **Real bank integration (Plaid etc.)** — we consume the provided mock bank endpoint instead.
+- **Multi-currency conversion** — we record a transaction's currency as-is; we do not convert
+  between currencies (see the receipt edge-case note).
+
+Ship the user app, nothing else.
 
 ---
 
@@ -44,6 +50,10 @@ The core of the product. Full detail in the Agent section below.
 ---
 
 ## LangGraph Agent Design
+
+> ⚠️ **Routing shape under active design (being decided together).** Whether this is a *single*
+> agent or a *supervisor + sub-agent* split is the open question. What is already settled and not
+> changing: the tool set below, the **LLM-never-writes-SQL** rule, and the large-context strategy.
 
 ### Agent Flow
 
@@ -106,9 +116,74 @@ parameters. It never touches SQL directly. The tool owns the query, the LLM owns
 ### Large Context Handling
 - Never load a user's full transaction history into the LLM context
 - Use **SQL GROUP BY** for aggregations — that is what a database is for
+- **Pre-aggregated rollups for scale.** A `monthly_category_rollups` table (refreshed by an ARQ
+  task on every ingest) holds per-user, per-month, per-category totals. Queries that span years
+  ("am I spending more than usual?", "summarize my finances", "compare to last year") read a few
+  hundred rollup rows instead of scanning millions of raw transactions. Raw rows are only touched
+  for drill-downs (e.g. "show me those grocery transactions"). This is the direct answer to the
+  brief's "must hold up at 10×–100× data."
+- **Composite indexes** on `(user_id, date)` and `(user_id, category, date)` so even raw-row
+  queries stay range-scoped — never a full-table scan.
 - For temporal queries, fetch only the relevant date ranges
 - Summarize long chat histories before passing to context (keep last N turns + a running summary)
 - User preferences are fetched from DB on each request, not stored in context
+
+---
+
+## Handling the Unexpected (Brief §5)
+
+Real inputs are messy, and the evaluators say they may inject a new input mid-session. Explicit
+strategy for each situation the brief names:
+
+### "I genuinely cannot answer that"
+- Every data tool returns a structured `no_data` / `out_of_range` signal. An empty result is
+  **never** silently narrated as "you spent 0."
+- The assistant states what it does *not* have ("your history starts in March 2024, so I can't
+  compare to last year") and offers the nearest answerable question — it never fabricates a number.
+- Out-of-domain questions ("what's the weather?") are declined politely and steered back to finance.
+
+### Contradicting / duplicate sources
+- The same purchase can arrive from **both** the CSV and the mock bank feed, or a **receipt upload
+  can double-count a card charge already in the data.** Exact duplicates are caught by the `hash`
+  unique constraint (idempotent re-ingest).
+- **Near-duplicates** (same amount + merchant within a ±2-day window across different `source`s)
+  are flagged as *suspected duplicates* rather than blindly merged. The assistant surfaces the
+  conflict, prefers the bank/authoritative source, and notes the assumption.
+- On receipt upload we look for a matching existing transaction before inserting; if found, we
+  **enrich** it (attach line items) instead of creating a second expense.
+
+### Bad receipt photos
+- `receipt_ocr_tool` returns **confidence + extracted fields**, not a blind write.
+- Low confidence, rotated, partial, or unreadable → the assistant **asks the user to confirm or
+  correct** merchant/amount/date before recording, instead of saving wrong data.
+- Foreign-language / foreign-currency receipts: capture the **currency as printed** and store it
+  (no conversion); translate field labels for display only.
+
+---
+
+## Safety & Data Trust
+
+- **The LLM never writes SQL** — it fills typed tool parameters; tools own parameterized queries.
+  This stops injection and hallucinated column names at the source.
+- **Untrusted text is data, not instructions.** Merchant strings, CSV description columns, and
+  receipt OCR output can carry prompt-injection payloads ("ignore previous instructions…"). Any
+  such text placed in a model prompt is wrapped in explicit delimiters and labelled untrusted; the
+  system prompt states that content inside those delimiters is never an instruction. This is why
+  `raw_description` is stored separately from the cleaned `merchant`.
+- **Tool inputs are validated/whitelisted** before any query runs — `category` against the user's
+  known categories, `period` against an allowed enum, date ranges bounded.
+
+---
+
+## Correctness Check (cheap, high-signal)
+
+Finance users trust numbers — a wrong figure is worse than "I don't know." A tiny eval harness:
+- ~8–10 canned questions over the sample dataset whose answers are computed independently (plain
+  SQL/pandas) and asserted against the assistant's tool output (e.g. "groceries in March" = X).
+- Includes at least one **unanswerable** question (asserts a graceful decline) and one **ambiguous**
+  one (asserts it interprets sensibly or asks).
+- Runs in seconds. Proves the SQL tools return *correct* numbers and that routing picks the right
+  tool — directly demonstrable to the evaluators.
 
 ---
 
@@ -246,6 +321,7 @@ frontend/
 | `fetch_mock_bank_data` | On-demand or scheduled | External network call, unknown latency |
 | `run_subscription_detection` | After new data ingested | Batch scan, expensive to run per-request |
 | `run_anomaly_detection` | After new data ingested | Same — batch, not per-query |
+| `refresh_monthly_rollups` | After new data ingested | Keeps the pre-aggregated rollup table current so multi-month/year queries stay cheap |
 
 Worker entry point: `worker.py` — registered with Redis via ARQ.
 
@@ -254,15 +330,26 @@ Worker entry point: `worker.py` — registered with Redis via ARQ.
 ## Database Schema (High Level)
 
 ```sql
-users            (id, clerk_id, email, created_at)
-transactions     (id, user_id, date, amount, merchant, category, source, hash, created_at)
-budgets          (id, user_id, category, limit_amount, period, created_at)
-chat_messages    (id, user_id, role, content, created_at)
-user_preferences (id, user_id, key, value, updated_at)
+users                    (id, clerk_id, email, created_at)
+transactions             (id, user_id, date, amount, currency, merchant, raw_description,
+                          category, source, hash, created_at)
+budgets                  (id, user_id, category, limit_amount, period, created_at)
+chat_messages            (id, user_id, role, content, created_at)
+user_preferences         (id, user_id, key, value, updated_at)
+monthly_category_rollups (id, user_id, month, category, total_amount, txn_count, updated_at)
+
+-- indexes
+transactions:  (user_id, date), (user_id, category, date), unique(user_id, hash)
+rollups:       unique(user_id, month, category)
 ```
 
-- `transactions.hash` — SHA256 of (user_id + date + amount + merchant) for deduplication
-- `transactions.source` — `"csv"` or `"bank_api"` for auditability
+- `transactions.hash` — SHA256 of (user_id + date + amount + merchant); a **unique constraint** so
+  re-ingesting the same CSV is idempotent (exact-duplicate dedup)
+- `transactions.source` — `"csv"` or `"bank_api"`, for auditability and cross-source reconciliation
+- `transactions.raw_description` — the original, **untrusted** merchant/description string, kept
+  separate from the cleaned `merchant` field (see Safety & Data Trust — never treated as instructions)
+- `transactions.currency` — stored, not converted (multi-currency conversion is out of scope)
+- `monthly_category_rollups` — pre-aggregated totals; the read path for any multi-month question
 - `user_preferences` — flat key-value store (e.g. `pay_date: "1"`, `exclude_from_food: "rent"`)
 
 ---
@@ -285,6 +372,10 @@ Be honest about this in the README. The evaluators read Section 7 carefully.
 | Anomaly detection | Threshold-based (charge > 2× category average) | Acceptable stub with honest note |
 | Cut-back suggestions | SQL aggregation + LLM narration | Rule-based is fine for 6 hours |
 | Merchant lookup | Web search tool — stub if time runs out | Low priority, mention in README |
+| Pre-aggregated rollups | Fully working | Direct answer to "holds up at 100× data" — high signal |
+| Cross-source reconciliation | Basic near-duplicate flagging | Honest heuristic, documented |
+| "Cannot answer" handling | Fully working | Cheap; directly tested by §5 |
+| Correctness eval harness | Small (~10 cases) | Proves the numbers are right; minutes to write |
 
 ---
 
@@ -292,10 +383,10 @@ Be honest about this in the README. The evaluators read Section 7 carefully.
 
 | Constraint | Approach |
 |-----------|----------|
-| **Fast responses** | Simple queries skip the LLM loop entirely — SQL result formatted directly |
-| **Economical** | Gemini 2.5 Flash-Lite is cheap. No full history in context — paginate and summarize. Don't run heavy tools on cheap queries. |
-| **Large data** | All aggregations done in SQL (GROUP BY, SUM, AVG). LLM only narrates results — never counts rows. Date-range filtering on every query. |
-| **Many concurrent users** | Stateless async FastAPI + ARQ workers scale horizontally. Redis handles shared state. |
+| **Fast responses** | Two fast-path mechanisms: (1) **structured UI actions** (clicking a budget card, opening transactions) hit the API directly and never touch an LLM; (2) for natural-language lookups, the model interprets intent once, the tool runs, and a **deterministic template** renders single-value results — no second LLM narration call. SSE streaming keeps anything heavier feeling responsive. |
+| **Economical** | No full transaction history in context. Single-value results are templated, not narrated, to skip a 2nd LLM call. Heavy reasoning fires only on queries that need it (*how we escalate is the open agent-routing question we're settling*). **Cache** in Redis: merchant lookups globally (merchant identity isn't user-specific) + recent per-user summaries. |
+| **Large data** | Pre-aggregated `monthly_category_rollups` for multi-month questions; raw-row queries are index-scoped and date-filtered. All aggregation in SQL (GROUP BY/SUM/AVG) — the LLM narrates, never counts rows. |
+| **Many concurrent users** | Stateless async FastAPI + ARQ workers scale horizontally. Redis handles shared state and caching. |
 
 ---
 
@@ -311,20 +402,3 @@ They are not counting features. The real signals:
 
 The **design note is worth as much as the code.** A clean, honest README explaining your
 trade-offs is part of the deliverable, not an afterthought.
-
----
-
-## Time Budget Suggestion (6 Hours)
-
-| Phase | Time |
-|-------|------|
-| Project setup (repo, env, DB, Clerk, FastAPI skeleton) | 45 min |
-| Data ingestion (CSV parser, normalization, dedup) | 45 min |
-| LangGraph agent + 4–5 core tools (spending, summary, budget, memory, temporal) | 2 hrs |
-| Chat API endpoint + frontend chat UI | 1 hr |
-| Receipt OCR tool + CSV upload UI | 30 min |
-| Stub remaining tools (subscriptions, anomaly) with honest stubs | 20 min |
-| README / design note | 30 min |
-
-If something is taking too long, stub it and document it. A narrow slice that genuinely works
-beats a broad set of half-finished features — that is a direct quote from the brief.
